@@ -31,10 +31,23 @@ jobs:
     - name: Print compiler version
       run: ${{ env.CC }} --version
 
+    - name: Update automake
+      run: |
+        wget https://ftp.gnu.org/gnu/automake/automake-1.16.5.tar.gz
+        tar xvfz automake-1.16.5.tar.gz
+        cd automake-1.16.5
+        ./configure
+        make -j2
+        sudo make install -j2
+    
+    - name: Print automake version
+      run: automake --version
+
     - name: Install zimg
       run: |
         git clone https://github.com/sekrit-twc/zimg --branch v3.0 --depth 1
         pushd zimg
+        libtoolize
         ./autogen.sh
         ./configure --prefix=/usr
         make -j2
@@ -58,6 +71,7 @@ jobs:
 
     - name: configure
       run: |
+        libtoolize
         ./autogen.sh
         ./configure --prefix=/usr
 
