@@ -2,7 +2,7 @@ project('vapoursynth', ['c', 'cpp'],
     default_options: ['buildtype=release', 'default_library=both', 'warning_level=2', 'b_ndebug=if-release', 'c_std=c99', 'cpp_std=c++14'],
     license: 'LGPL-2.1-or-later',
     meson_version: '>=0.53.0',
-    version: '57'
+    version: '58'
 )
 
 enable_guard_pattern = get_option('enable_guard_pattern')
