@@ -280,6 +280,7 @@ if enable_core
                 'src/pybindings/__init__.py',
                 'src/pybindings/__main__.py',
                 'src/pybindings/_cli.py',
+                'src/pybindings/_signatures.py',
                 'src/pybindings/_utils.py',
                 'src/pybindings/_constants.pyi',
                 'src/pybindings/_main.pyi',

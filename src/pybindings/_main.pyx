@@ -51,10 +51,8 @@ import atexit
 import contextlib
 import ctypes
 import enum
-import functools
 import gc
 import inspect
-import keyword
 import logging
 import os
 import sys
@@ -64,13 +62,7 @@ import typing
 import warnings
 import weakref
 
-from collections.abc import (
-    ItemsView,
-    Iterable,
-    KeysView,
-    MutableMapping,
-    ValuesView,
-)
+from collections.abc import ItemsView, Iterable, KeysView, MutableMapping, ValuesView
 from concurrent.futures import Future
 from fractions import Fraction
 from threading import Lock, RLock, local as ThreadLocal
@@ -88,6 +80,7 @@ from ._constants import (
     __api_version__,
     __version__,
 )
+from ._signatures import construct_signature, _construct_repr
 
 
 @cython.final
@@ -518,132 +511,6 @@ class VideoOutputTuple(typing.NamedTuple):
     alpha: typing.Union[VideoNode, None]
     alt_output: typing.Literal[0, 1, 2]
 
-
-def _construct_type(signature):
-    type,*opt = signature.split(":")
-
-    # Handle Arrays.
-    if type.endswith("[]"):
-        array = True
-        type = type[:-2]
-    else:
-        array = False
-
-    # Handle types
-    if type == "vnode":
-        type = VideoNode
-    elif type == "anode":
-        type = AudioNode
-    elif type == "vframe":
-        type = VideoFrame
-    elif type == "aframe":
-        type = AudioFrame
-    elif type == "func":
-        type = typing.Union[Func, typing.Callable]
-    elif type == "int":
-        type = int
-    elif type == "float":
-        type = float
-    elif type == "data":
-        type = typing.Union[str, bytes, bytearray]
-    else:
-        type = typing.Any
-
-    # Make the type a sequence.
-    if array:
-        type = typing.Union[type, typing.Sequence[type]]
-
-    # Mark an optional type
-    if opt:
-        type = typing.Optional[type]
-
-    return type
-
-def _construct_parameter(signature):
-    if signature == "any":
-        return inspect.Parameter(
-            "kwargs", inspect.Parameter.VAR_KEYWORD,
-            annotation=typing.Any
-        )
-
-    name, signature = signature.split(":", 1)
-
-    if keyword.iskeyword(name):
-        name += "_"
-
-    type = _construct_type(signature)
-
-    __,*opt = signature.split(":")
-    if opt:
-        default_value = None
-    else:
-        default_value = inspect.Parameter.empty
-
-    return inspect.Parameter(
-        name, inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        default=default_value, annotation=type
-    )
-
-def construct_signature(signature, return_signature, injected=None, name=None):
-    if isinstance(signature, Function):
-        signature = signature.signature
-
-    params = list(
-        _construct_parameter(param)
-        for param in signature.split(";")
-        if param
-    )
-
-    if injected and params:
-        del params[0]
-
-    return_annotations = list(
-        _construct_parameter(rparam)
-        for rparam in return_signature.split(";")
-        if rparam
-    )
-
-    if not return_annotations:
-        return_annotation = None
-    elif len(return_annotations) == 1:
-        return_annotation = return_annotations.pop().annotation
-    else:
-        ret_dict_name = f'_ReturnDict_{name}' if name else '_ReturnDict'
-        return_annotation = typing.TypedDict(
-            ret_dict_name, {ret_ann.name: ret_ann.annotation for ret_ann in return_annotations}, total=True
-        )
-        return_annotation.__module__ = Exception.__module__
-
-
-    return inspect.Signature(tuple(params), return_annotation=return_annotation)
-
-def _construct_repr_wrap(value):
-    if isinstance(value, (enum.Enum, VideoFormat)):
-        return value.name
-
-    if isinstance(value, typing.Iterator):
-        value = ', '.join(_construct_repr_wrap(v) for v in value)
-
-    to_wrap = isinstance(value, str) and not value.startswith('<') and ' ' in value
-
-    if to_wrap:
-        return f'"{value}"'
-
-    return value
-
-def _construct_repr(obj, **kwargs):
-    address = f'{id(obj):X}'.rjust(16, "0")
-
-    add_data = ''
-
-    if kwargs:
-        add_data += ', '.join(
-            f'{key}={_construct_repr_wrap(value)}'
-            for key, value in kwargs.items()
-        )
-        add_data = f' {add_data}'
-
-    return f'<{obj.__class__.__module__}.{obj.__class__.__qualname__} object at 0x{address}{add_data}>'
 
 class Error(Exception):
     def __init__(self, value):
