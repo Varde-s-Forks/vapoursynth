@@ -18,7 +18,7 @@
 #
 """ This is the VapourSynth module implementing the Python bindings. """
 
-include 'vsconstants.pxd'
+include 'vsconstants4.pxd'
 from vsscript_internal cimport VSScript
 from wave cimport WaveHeader, Wave64Header, CreateWave64Header, CreateWaveHeader, PackChannels16to16le, PackChannels32to24le, PackChannels32to32le
 cimport cython.parallel

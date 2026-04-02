@@ -18,8 +18,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 #
 
-from vsconstants cimport *
-from vapoursynth cimport *
+from vsconstants4 cimport *
+from vapoursynth4 cimport *
 
 from enum import IntEnum, IntFlag
 
