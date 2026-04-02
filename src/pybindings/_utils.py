@@ -217,7 +217,15 @@ def _check_windows_env() -> None:
 
 def _get_vapoursynth_config_path() -> Path:
     if sys.platform == "win32":
-        config_path = Path(os.getenv('APPDATA')) / 'vapoursynth'
+        import ctypes
+        from ctypes import wintypes
+
+        CSIDL_APPDATA = 26
+
+        buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+        ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_APPDATA, None, 0, buf)
+
+        config_path = Path(buf.value) / 'vapoursynth'
     else:
         config_path = Path.home() / '.config/vapoursynth'
     config_path.mkdir(parents=True, exist_ok=True)
