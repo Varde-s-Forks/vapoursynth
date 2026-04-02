@@ -21,12 +21,14 @@ def get_plugin_dir() -> str:
 
 def get_vsscript() -> str:
     """Return the location of the vsscript library."""
-    if sys.platform == "win32":
-        return str(PurePath(__file__).with_name("vsscript.dll"))
-    elif sys.platform == "darwin":
-        return str(PurePath(__file__).with_name("libvsscript.4.dylib"))
-    else:
-        return str(PurePath(__file__).with_name("libvsscript.so.4"))
+    match sys.platform:
+        case "win32":
+            path = PurePath(__file__).with_name("vsscript.dll")
+        case "darwin":
+            path = PurePath(__file__).with_name("libvsscript.4.dylib")
+        case _:
+            path = PurePath(__file__).with_name("libvsscript.so.4")
+    return str(path)
 
 
 # All code for scripts executables
@@ -164,52 +166,53 @@ def _find_python_symbol_path() -> str | Path | None:
 
 
 def _check_windows_env() -> None:
-def _check_windows_env():
-    if sys.platform == "win32":
-        import winreg
+    if sys.platform != "win32":
+        return
 
-        vapoursynth_path = None
+    import winreg
 
+    vapoursynth_path = None
+
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"SOFTWARE\VapourSynth", 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY
+        )
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER, r"SOFTWARE\VapourSynth", 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY
-            )
-            try:
-                vapoursynth_path = winreg.QueryValueEx(key, "Path")[0]
-            finally:
-                winreg.CloseKey(key)
-        except Exception:
-            pass
+            vapoursynth_path = winreg.QueryValueEx(key, "Path")[0]
+        finally:
+            winreg.CloseKey(key)
+    except Exception:
+        pass
 
-        if vapoursynth_path and PurePath(__file__).parent.full_match(vapoursynth_path):
-            print("Registry entries: this installation")
-        elif vapoursynth_path:
-            print(f'Registry entries: (other installation) "{vapoursynth_path}"')
-        else:
-            print("Registry entries: not set")
+    if vapoursynth_path and PurePath(__file__).parent.full_match(vapoursynth_path):
+        print("Registry entries: this installation")
+    elif vapoursynth_path:
+        print(f'Registry entries: (other installation) "{vapoursynth_path}"')
+    else:
+        print("Registry entries: not set")
 
-        vfw_path = None
+    vfw_path = None
 
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"SOFTWARE\Classes\CLSID\{58F74CA0-BD0E-4664-A49B-8D10E6F0C131}\InProcServer32",
+            0,
+            winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
+        )
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"SOFTWARE\Classes\CLSID\{58F74CA0-BD0E-4664-A49B-8D10E6F0C131}\InProcServer32",
-                0,
-                winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
-            )
-            try:
-                vfw_path = winreg.QueryValueEx(key, None)[0]
-            finally:
-                winreg.CloseKey(key)
-        except Exception:
-            pass
+            vfw_path = winreg.QueryValueEx(key, None)[0]
+        finally:
+            winreg.CloseKey(key)
+    except Exception:
+        pass
 
-        if vfw_path and PurePath(__file__).with_name("vsvfw.dll").full_match(vfw_path):
-            print("VFW module: this installation")
-        elif vfw_path:
-            print(f'VFW module: (other installation) "{vfw_path}"')
-        else:
-            print("VFW module: not set")
+    if vfw_path and PurePath(__file__).with_name("vsvfw.dll").full_match(vfw_path):
+        print("VFW module: this installation")
+    elif vfw_path:
+        print(f'VFW module: (other installation) "{vfw_path}"')
+    else:
+        print("VFW module: not set")
 
 
 def _get_vapoursynth_config_path() -> Path:
