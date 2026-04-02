@@ -266,6 +266,7 @@ if enable_core
             files(
                 'src/pybindings/__init__.py',
                 'src/pybindings/__main__.py',
+                'src/pybindings/_cli.py',
                 'src/pybindings/_utils.py',
                 'src/pybindings/_bindings.pyi',
             ),
