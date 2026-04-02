@@ -1,6 +1,6 @@
-from ._utils import *
-from ._bindings import *
-from ._bindings import (
+from ._constants import *
+from ._main import *
+from ._main import (
     __api_version__,
     __pyx_capi__,
     __version__,
@@ -10,6 +10,7 @@ from ._bindings import (
     _FastManager,
     _try_enable_introspection,
 )
+from ._utils import *
 
 __all__ = [
     "GRAY",

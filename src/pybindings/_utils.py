@@ -6,7 +6,7 @@ from ctypes.util import find_library
 from pathlib import Path, PurePath
 from typing import Any
 
-from ._bindings import __version__
+from ._main import __version__
 
 
 def get_include() -> str:

@@ -17,8 +17,7 @@
 # License along with VapourSynth; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 #
-
-from _bindings cimport VSCore
+from vapoursynth cimport VSCore
 
 cdef extern from "src/vsscript/vsscript_internal.h" nogil:
 

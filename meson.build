@@ -87,6 +87,9 @@ add_project_arguments(
 
 if is_win
     add_project_arguments('-DVS_TARGET_OS_WINDOWS', '-D_UNICODE', '-DUNICODE', language: lang)
+    if cxx.get_id() == 'msvc'
+        add_project_arguments('/wd4551', language: lang)
+    endif
 elif host_system == 'darwin'
     add_project_arguments('-DVS_TARGET_OS_DARWIN', language: lang)
 elif host_system in ['dragonfly', 'freebsd', 'gnu', 'linux', 'netbsd', 'openbsd']
@@ -250,17 +253,27 @@ if enable_core
     if enable_python_module
         add_languages('cython', native: false)
 
-        py.extension_module('_bindings',
-            files('src/common/wave.cpp', 'src/pybindings/_bindings.pyx'),
-            cython_args: ['-I' + meson.project_source_root() / 'src/pybindings'],
-            dependencies: [py_dep, vapoursynth_dep],
-            include_directories: include_directories('src/pybindings'),
-            install: true,
-            install_rpath: '$ORIGIN',
-            limited_api: '3.12',
-            override_options: 'cython_language=cpp',
-            subdir: 'vapoursynth',
+        py_ext_kwargs = {
+            'cython_args': ['-I' + meson.project_source_root() / 'src/pybindings'],
+            'dependencies': [py_dep, vapoursynth_dep],
+            'include_directories': include_directories('src/pybindings'),
+            'install': true,
+            'install_rpath': '$ORIGIN',
+            'limited_api': '3.12',
+            'override_options': 'cython_language=cpp',
+            'subdir': 'vapoursynth',
+        }
+
+        py.extension_module('_main',
+            files('src/common/wave.cpp', 'src/pybindings/_main.pyx'),
+            kwargs: py_ext_kwargs,
         )
+
+        py.extension_module('_constants',
+            files('src/pybindings/_constants.pyx'),
+            kwargs: py_ext_kwargs,
+        )
+
 
         py.install_sources(
             files(
@@ -268,7 +281,8 @@ if enable_core
                 'src/pybindings/__main__.py',
                 'src/pybindings/_cli.py',
                 'src/pybindings/_utils.py',
-                'src/pybindings/_bindings.pyi',
+                'src/pybindings/_constants.pyi',
+                'src/pybindings/_main.pyi',
             ),
             subdir: 'vapoursynth',
         )
