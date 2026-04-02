@@ -65,7 +65,6 @@ import weakref
 from collections.abc import ItemsView, Iterable, KeysView, MutableMapping, ValuesView
 from concurrent.futures import Future
 from fractions import Fraction
-from threading import Lock, RLock, local as ThreadLocal
 from types import MappingProxyType
 
 from ._constants import (
@@ -1735,7 +1734,7 @@ cdef class RawNode(object):
 
         finished = False
         running = 0
-        lock = RLock()
+        lock = threading.RLock()
         reorder = {}
         curr_frames = 0
 
@@ -3119,7 +3118,7 @@ cdef class VSScriptEnvironmentPolicy:
     def on_policy_registered(self, policy_api):
         global _warnings_showwarning
 
-        self._stack = ThreadLocal()
+        self._stack = threading.local()
         self._api = policy_api
         self._env_map = {}
 
