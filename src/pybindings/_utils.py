@@ -4,21 +4,22 @@ import sys
 import tomllib
 from ctypes.util import find_library
 from pathlib import Path, PurePath
+from typing import Any
 
 from ._bindings import Error, __version__
 
 
-def get_include():
+def get_include() -> str:
     """Return the directory that contains the VapourSynth header files."""
     return str(PurePath(__file__).with_name("include"))
 
 
-def get_plugin_dir():
+def get_plugin_dir() -> str:
     """Return the VapourSynth plugin directory location."""
     return str(PurePath(__file__).with_name("plugins"))
 
 
-def get_vsscript():
+def get_vsscript() -> str:
     """Return the location of the vsscript library."""
     if sys.platform == "win32":
         return str(PurePath(__file__).with_name("vsscript.dll"))
@@ -31,7 +32,7 @@ def get_vsscript():
 # All code for scripts executables
 
 
-def _version_string_to_number(version_string):
+def _version_string_to_number(version_string: str) -> int:
     version_parts = version_string.strip().split(".", 4)
     while len(version_parts) < 4:
         version_parts.append("0")
@@ -43,7 +44,7 @@ def _version_string_to_number(version_string):
     )
 
 
-def _is_msi_product_installed(upgrade_code, min_version):
+def _is_msi_product_installed(upgrade_code: str, min_version: str) -> bool:
     from ctypes.wintypes import DWORD, LPCWSTR, LPDWORD, LPWSTR, UINT
 
     msi = ctypes.WinDLL("msi.dll")
@@ -58,7 +59,7 @@ def _is_msi_product_installed(upgrade_code, min_version):
     if MsiEnumRelatedProductsW(upgrade_code, 0, 0, product_code_buf) != 0:
         return False
 
-    version_string_size = ctypes.wintypes.DWORD(16)
+    version_string_size = DWORD(16)
     version_string_buf = ctypes.create_unicode_buffer(version_string_size.value)
 
     err_code = MsiGetProductInfoW(
@@ -78,16 +79,15 @@ def _is_msi_product_installed(upgrade_code, min_version):
     return _version_string_to_number(version_string_buf.value) >= _version_string_to_number(min_version)
 
 
-def _check_visual_studio_runtime():
-    if sys.platform == "win32":
-        if not _is_msi_product_installed("{36F68A90-239C-34DF-B58C-64B30153CE35}", "14.50.35719.0"):
-            print("The Visual Studio 2015-2026 runtime which is required to run VapourSynth is missing or too old!")
-            print("The latest version can be downloaded from:")
-            print("    x64: https://aka.ms/vc14/vc_redist.x64.exe")
-            print("  arm64: https://aka.ms/vc14/vc_redist.arm64.exe")
+def _check_visual_studio_runtime() -> None:
+    if sys.platform == "win32" and not _is_msi_product_installed("{36F68A90-239C-34DF-B58C-64B30153CE35}", "14.50.35719.0"):
+        print("The Visual Studio 2015-2026 runtime which is required to run VapourSynth is missing or too old!")
+        print("The latest version can be downloaded from:")
+        print("    x64: https://aka.ms/vc14/vc_redist.x64.exe")
+        print("  arm64: https://aka.ms/vc14/vc_redist.arm64.exe")
 
 
-def _find_python_symbol_path():
+def _find_python_symbol_path() -> str | Path | None:
     if sys.platform == "win32":
         from ctypes.wintypes import DWORD, HMODULE, LPWSTR, MAX_PATH
 
@@ -163,6 +163,7 @@ def _find_python_symbol_path():
         return None
 
 
+def _check_windows_env() -> None:
 def _check_windows_env():
     if sys.platform == "win32":
         import winreg
@@ -210,7 +211,8 @@ def _check_windows_env():
         else:
             print("VFW module: not set")
 
-def _get_vapoursynth_config_path():
+
+def _get_vapoursynth_config_path() -> Path:
     if sys.platform == "win32":
         config_path = Path(os.getenv('APPDATA')) / 'vapoursynth'
     else:
@@ -218,7 +220,7 @@ def _get_vapoursynth_config_path():
     config_path.mkdir(parents=True, exist_ok=True)
     return config_path / 'vapoursynth.toml'
 
-def _has_implicit_config():
+def _has_implicit_config() -> bool:
     if sys.platform == "win32":
         direct_python_exe_path = Path(__file__).parent.parent.parent.parent
         direct_python_dll_path = direct_python_exe_path / 'python3.dll'
@@ -264,10 +266,10 @@ def vapoursynth_check_env():
 
     _check_windows_env()
     
-def _escape_toml_string(s):
+def _escape_toml_string(s: str) -> str:
     return '"' + str(s).replace('\\', '\\\\') + '"'
 
-def vapoursynth_config():
+def vapoursynth_config() -> None:
     _check_visual_studio_runtime()
     
     if _has_implicit_config():
@@ -300,7 +302,7 @@ def vapoursynth_config():
     except Exception:
         print(f"Failed to write configuration to {config_path}")
 
-def _write_registry_entries(entries):
+def _write_registry_entries(entries: list[dict[str, Any]]) -> bool:
     import winreg
 
     for entry in entries:
@@ -324,7 +326,7 @@ def _write_registry_entries(entries):
     return True
 
 
-def register_legacy_install():
+def register_legacy_install() -> None:
     if sys.platform != "win32":
         raise Error("Command is only supported on Windows!")
 
@@ -373,7 +375,7 @@ def register_legacy_install():
         print("Successfully wrote legacy installation information to registry!")
 
 
-def register_install():
+def register_install() -> None:
     if sys.platform != "win32":
         raise Error("Command is only supported on Windows!")
 
@@ -400,7 +402,7 @@ def register_install():
         print("Successfully set environment variables!")
 
 
-def register_vfw():
+def register_vfw() -> None:
     if sys.platform != "win32":
         raise Error("Command is only supported on Windows!")
 
@@ -462,7 +464,7 @@ def register_vfw():
     else:
         print("VFW provider successfully registered!")
 
-def vspipe():
+def vspipe() -> None:
     import subprocess
 
     vspipe_path = PurePath(__file__)
