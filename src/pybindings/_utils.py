@@ -6,7 +6,7 @@ from ctypes.util import find_library
 from pathlib import Path, PurePath
 from typing import Any
 
-from ._bindings import Error, __version__
+from ._bindings import __version__
 
 
 def get_include() -> str:
@@ -339,7 +339,7 @@ def _write_registry_entries(entries: list[dict[str, Any]]) -> bool:
 
 def register_legacy_install() -> None:
     if sys.platform != "win32":
-        raise Error("Command is only supported on Windows!")
+        raise OSError("Command is only supported on Windows!")
 
     entries = [
         {
@@ -388,7 +388,7 @@ def register_legacy_install() -> None:
 
 def register_install() -> None:
     if sys.platform != "win32":
-        raise Error("Command is only supported on Windows!")
+        raise OSError("Command is only supported on Windows!")
 
     entries = [
         {
@@ -415,7 +415,7 @@ def register_install() -> None:
 
 def register_vfw() -> None:
     if sys.platform != "win32":
-        raise Error("Command is only supported on Windows!")
+        raise OSError("Command is only supported on Windows!")
 
     entries = [
         # CLSID for VapourSynth VFW
