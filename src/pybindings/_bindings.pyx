@@ -17,7 +17,6 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 """ This is the VapourSynth module implementing the Python bindings. """
 
-cimport vapoursynth
 include 'vsconstants.pxd'
 from vsscript_internal cimport VSScript
 from wave cimport WaveHeader, Wave64Header, CreateWave64Header, CreateWaveHeader, PackChannels16to16le, PackChannels32to24le, PackChannels32to32le
@@ -658,15 +657,15 @@ def _construct_type(signature):
 
     # Handle types
     if type == "vnode":
-        type = vapoursynth.VideoNode
+        type = VideoNode
     elif type == "anode":
-        type = vapoursynth.AudioNode
+        type = AudioNode
     elif type == "vframe":
-        type = vapoursynth.VideoFrame
+        type = VideoFrame
     elif type == "aframe":
-        type = vapoursynth.AudioFrame
+        type = AudioFrame
     elif type == "func":
-        type = typing.Union[vapoursynth.Func, typing.Callable]
+        type = typing.Union[Func, typing.Callable]
     elif type == "int":
         type = int
     elif type == "float":
@@ -712,7 +711,7 @@ def _construct_parameter(signature):
     )
 
 def construct_signature(signature, return_signature, injected=None, name=None):
-    if isinstance(signature, vapoursynth.Function):
+    if isinstance(signature, Function):
         signature = signature.signature
 
     params = list(

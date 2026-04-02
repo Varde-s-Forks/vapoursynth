@@ -6,7 +6,7 @@ import tomllib
 from ctypes.util import find_library
 from pathlib import Path, PurePath
 
-from .vapoursynth import Error, __version__
+from ._bindings import Error, __version__
 
 
 def get_include():

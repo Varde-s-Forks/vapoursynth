@@ -250,9 +250,11 @@ if enable_core
     if enable_python_module
         add_languages('cython', native: false)
 
-        py.extension_module('vapoursynth',
-            files('src/common/wave.cpp', 'src/cython/vapoursynth.pyx'),
+        py.extension_module('_bindings',
+            files('src/common/wave.cpp', 'src/pybindings/_bindings.pyx'),
+            cython_args: ['-I' + meson.project_source_root() / 'src/pybindings'],
             dependencies: [py_dep, vapoursynth_dep],
+            include_directories: include_directories('src/pybindings'),
             install: true,
             install_rpath: '$ORIGIN',
             limited_api: '3.12',
@@ -262,10 +264,10 @@ if enable_core
 
         py.install_sources(
             files(
-                'src/py/__init__.py',
-                'src/py/__main__.py',
-                'src/py/_utils.py',
-                'src/py/vapoursynth.pyi',
+                'src/pybindings/__init__.py',
+                'src/pybindings/__main__.py',
+                'src/pybindings/_utils.py',
+                'src/pybindings/_bindings.pyi',
             ),
             subdir: 'vapoursynth',
         )

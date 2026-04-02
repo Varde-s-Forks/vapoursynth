@@ -1,6 +1,6 @@
 from ._utils import *
-from .vapoursynth import *
-from .vapoursynth import (
+from ._bindings import *
+from ._bindings import (
     __api_version__,
     __pyx_capi__,
     __version__,
