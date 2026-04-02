@@ -47,21 +47,21 @@ cdef extern from "include/VapourSynth4.h" nogil:
     ctypedef struct VSFrameContext:
         pass
 
-    enum:
+    ctypedef enum VSMediaType:
         mtVideo
         mtAudio
 
-    enum:
+    ctypedef enum VSColorFamily:
         cfUndefined
         cfGray
         cfRGB
         cfYUV
 
-    enum:
+    ctypedef enum VSSampleType:
         stInteger
         stFloat
 
-    enum:
+    ctypedef enum VSPresetVideoFormat:
         pfNone
 
         pfGray8
@@ -122,7 +122,7 @@ cdef extern from "include/VapourSynth4.h" nogil:
         pfRGBH
         pfRGBS
 
-    enum:
+    ctypedef enum VSFilterMode:
         fmParallel
         fmParallelRequests
         fmUnordered
@@ -137,7 +137,7 @@ cdef extern from "include/VapourSynth4.h" nogil:
         int subSamplingH
         int numPlanes
 
-    enum:
+    ctypedef enum VSAudioChannels:
         acFrontLeft
         acFrontRight
         acFrontCenter
@@ -193,7 +193,7 @@ cdef extern from "include/VapourSynth4.h" nogil:
         maReplace
         maAppend
 
-    struct VSCoreInfo:
+    ctypedef struct VSCoreInfo:
         char *versionString
         int core
         int api
@@ -201,7 +201,7 @@ cdef extern from "include/VapourSynth4.h" nogil:
         int64_t maxFramebufferSize
         int64_t usedFramebufferSize
         
-    struct VSCoreInfo2:
+    ctypedef struct VSCoreInfo2:
         char *versionString
         int coreVersion
         int apiVersion
@@ -210,7 +210,7 @@ cdef extern from "include/VapourSynth4.h" nogil:
         int64_t maxFramebufferSize
         int64_t usedFramebufferSize
 
-    struct VSVideoInfo:
+    ctypedef struct VSVideoInfo:
         VSVideoFormat format
         int64_t fpsNum
         int64_t fpsDen
@@ -218,39 +218,39 @@ cdef extern from "include/VapourSynth4.h" nogil:
         int height
         int numFrames
 
-    struct VSAudioInfo:
+    ctypedef struct VSAudioInfo:
         VSAudioFormat format
         int sampleRate
         int64_t numSamples
         int numFrames
 
-    enum VSActivationReason:
+    ctypedef enum VSActivationReason:
         arInitial
         arAllFramesReady
         arError
 
-    enum:
+    ctypedef enum VSMessageType:
         mtDebug
         mtInformation
         mtWarning
         mtCritical
         mtFatal
 
-    enum:
+    ctypedef enum VSCoreCreationFlags:
         ccfEnableGraphInspection
         ccfDisableAutoLoading
         ccfDisableLibraryUnloading
         ccfEnableFrameRefDebug
 
-    enum VSPluginConfigFlags:
+    ctypedef enum VSPluginConfigFlags:
         pcModifiable
 
-    enum VSDataTypeHint:
+    ctypedef enum VSDataTypeHint:
         dtUnknown
         dtBinary
         dtUtf8
 
-    struct VSFilterDependency:
+    ctypedef struct VSFilterDependency:
         VSNode *source;
         int requestPattern
 
