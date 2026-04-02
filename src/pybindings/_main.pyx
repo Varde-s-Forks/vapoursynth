@@ -18,41 +18,65 @@
 #
 """ This is the VapourSynth module implementing the Python bindings. """
 
-include 'vsconstants4.pxd'
-from vsscript_internal cimport VSScript
-from wave cimport WaveHeader, Wave64Header, CreateWave64Header, CreateWaveHeader, PackChannels16to16le, PackChannels32to24le, PackChannels32to32le
-cimport cython.parallel
-from cython cimport view, final
-from libc.stdlib cimport malloc, free, realloc
-from libc.stdint cimport intptr_t, int16_t, uint16_t, int32_t, uint32_t, uint8_t, uint64_t, int64_t
-from cpython.buffer cimport PyBUF_SIMPLE
-from cpython.buffer cimport PyBuffer_FillInfo
-from cpython.buffer cimport PyBuffer_Release
+import cython
+from cpython.buffer cimport PyBUF_SIMPLE, PyBuffer_FillInfo, PyBuffer_Release
 from cpython.memoryview cimport PyMemoryView_FromObject
-from cpython.number cimport PyIndex_Check
-from cpython.number cimport PyNumber_Index
-from cpython.ref cimport Py_INCREF, Py_DECREF
-import os
-import enum
-import ctypes
-import threading
-import traceback
-import gc
-import sys
-import inspect
-import weakref
+from cpython.number cimport PyIndex_Check, PyNumber_Index
+from cpython.ref cimport Py_DECREF, Py_INCREF
+from libc.stdint cimport (
+    int16_t,
+    int32_t,
+    int64_t,
+    intptr_t,
+    uint8_t,
+    uint16_t,
+    uint32_t,
+    uint64_t,
+)
+from libc.stdlib cimport free, malloc, realloc
+from vapoursynth4 cimport *
+from vsconstants4 cimport *
+from vsscript_internal cimport VSScript
+from wave cimport (
+    CreateWave64Header,
+    CreateWaveHeader,
+    PackChannels16to16le,
+    PackChannels32to24le,
+    PackChannels32to32le,
+    Wave64Header,
+    WaveHeader,
+)
+
 import atexit
 import contextlib
-import logging
+import ctypes
+import enum
 import functools
+import gc
+import inspect
+import keyword
+import logging
+import os
+import sys
+import threading
+import traceback
 import typing
 import warnings
-import keyword
-from threading import local as ThreadLocal, Lock, RLock
-from types import MappingProxyType
-from collections.abc import ItemsView, Iterable, KeysView, MutableMapping, ValuesView
+import weakref
+
+from collections.abc import (
+    ItemsView,
+    Iterable,
+    KeysView,
+    MutableMapping,
+    ValuesView,
+)
 from concurrent.futures import Future
 from fractions import Fraction
+from threading import Lock, RLock, local as ThreadLocal
+from types import MappingProxyType
+
+from ._constants import ColorFamily, SampleType, FilterMode, AudioChannels, MessageType, Range
 
 
 class VapourSynthVersion(typing.NamedTuple):
@@ -75,7 +99,7 @@ class VapourSynthAPIVersion(typing.NamedTuple):
 __version__ = VapourSynthVersion(VS_CURRENT_RELEASE, 0)
 __api_version__ = VapourSynthAPIVersion(VAPOURSYNTH_API_MAJOR, VAPOURSYNTH_API_MINOR)
 
-@final
+@cython.final
 cdef class EnvironmentData(object):
     cdef bint alive
     cdef Core core
@@ -123,7 +147,7 @@ class EnvironmentPolicy(object):
         return env.alive
 
 
-@final
+@cython.final
 cdef class StandaloneEnvironmentPolicy:
     cdef EnvironmentData _environment
     cdef object _api
@@ -195,7 +219,7 @@ cdef void __stdcall _logFree(void* userData) noexcept nogil:
     with gil:
         Py_DECREF(<object>userData)
 
-@final
+@cython.final
 cdef class EnvironmentPolicyAPI:
     # This must be a weak-ref to prevent a cyclic dependency that happens if the API
     # is stored within an EnvironmentPolicy-instance.
@@ -373,7 +397,7 @@ def unregister_on_destroy(callback):
     env.on_destroy.remove(callback)
 
 
-@final
+@cython.final
 cdef class _FastManager(object):
     cdef EnvironmentData target
     cdef EnvironmentData previous
@@ -3221,7 +3245,7 @@ cdef void __stdcall publicFunction(const VSMap *inm, VSMap *outm, void *userData
             vsapi.mapSetError(outm, emsg)
 
 
-@final
+@cython.final
 cdef class VSScriptEnvironmentPolicy:
     cdef dict _env_map
 
