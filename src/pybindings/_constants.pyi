@@ -1,5 +1,18 @@
 from enum import IntEnum, IntFlag
-from typing import Literal, cast
+from typing import Literal, NamedTuple, cast
+
+class VapourSynthVersion(NamedTuple):
+    release_major: int
+    release_minor: int
+    def __str__(self) -> str: ...
+
+class VapourSynthAPIVersion(NamedTuple):
+    api_major: int
+    api_minor: int
+    def __str__(self) -> str: ...
+
+__version__: VapourSynthVersion
+__api_version__: VapourSynthAPIVersion
 
 class MessageType(IntFlag):
     MESSAGE_TYPE_DEBUG = cast(MessageType, ...)

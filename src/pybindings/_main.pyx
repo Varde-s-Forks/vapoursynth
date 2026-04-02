@@ -76,28 +76,19 @@ from fractions import Fraction
 from threading import Lock, RLock, local as ThreadLocal
 from types import MappingProxyType
 
-from ._constants import ColorFamily, SampleType, FilterMode, AudioChannels, MessageType, Range
+from ._constants import (
+    AudioChannels,
+    ColorFamily,
+    FilterMode,
+    MessageType,
+    Range,
+    SampleType,
+    VapourSynthAPIVersion,
+    VapourSynthVersion,
+    __api_version__,
+    __version__,
+)
 
-
-class VapourSynthVersion(typing.NamedTuple):
-    release_major: int
-    release_minor: int
-
-    def __str__(self):
-        if self.release_minor:
-            return f'R{self.release_major}.{self.release_minor}'
-        return f'R{self.release_major}'
-
-class VapourSynthAPIVersion(typing.NamedTuple):
-    api_major: int
-    api_minor: int
-
-    def __str__(self):
-        return f'R{self.api_major}.{self.api_minor}'
-
-
-__version__ = VapourSynthVersion(VS_CURRENT_RELEASE, 0)
-__api_version__ = VapourSynthAPIVersion(VAPOURSYNTH_API_MAJOR, VAPOURSYNTH_API_MINOR)
 
 @cython.final
 cdef class EnvironmentData(object):

@@ -21,7 +21,29 @@
 from vsconstants4 cimport *
 from vapoursynth4 cimport *
 
+from typing import NamedTuple
 from enum import IntEnum, IntFlag
+
+
+class VapourSynthVersion(NamedTuple):
+    release_major: int
+    release_minor: int
+
+    def __str__(self):
+        if self.release_minor:
+            return f'R{self.release_major}.{self.release_minor}'
+        return f'R{self.release_major}'
+
+class VapourSynthAPIVersion(NamedTuple):
+    api_major: int
+    api_minor: int
+
+    def __str__(self):
+        return f'R{self.api_major}.{self.api_minor}'
+
+
+__version__ = VapourSynthVersion(VS_CURRENT_RELEASE, 0)
+__api_version__ = VapourSynthAPIVersion(VAPOURSYNTH_API_MAJOR, VAPOURSYNTH_API_MINOR)
 
 
 class MediaType(IntEnum):
