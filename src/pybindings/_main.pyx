@@ -90,7 +90,7 @@ cdef class EnvironmentData:
 
 
 cdef class EnvironmentPolicy:
-    def on_policy_registered(self, special_api) -> None:
+    def on_policy_registered(self, EnvironmentPolicyAPI special_api):
         pass
 
     def on_policy_cleared(self):
@@ -99,15 +99,15 @@ cdef class EnvironmentPolicy:
     def get_current_environment(self):
         raise NotImplementedError
 
-    def set_environment(self, environment):
+    def set_environment(self, EnvironmentData environment):
         raise NotImplementedError
 
-    def is_alive(self, environment):
-        cdef EnvironmentData env = <EnvironmentData>environment
-        return env.alive
+    def is_alive(self, EnvironmentData environment):
+        return environment.alive
+
 
 @cython.final
-cdef class StandaloneEnvironmentPolicy:
+cdef class StandaloneEnvironmentPolicy(EnvironmentPolicy):
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -121,11 +121,11 @@ cdef class StandaloneEnvironmentPolicy:
         }
         self._logger.log(levelmap[level], msg)
 
-    def on_policy_registered(self, EnvironmentPolicyAPI api):
-        self._api = api
+    def on_policy_registered(self, EnvironmentPolicyAPI special_api):
+        self._api = special_api
         self._logger = logging.getLogger("vapoursynth")
-        self._environment = api.create_environment(self._flags)
-        api.set_logger(self._environment, self._on_log_message)
+        self._environment = special_api.create_environment(self._flags)
+        special_api.set_logger(self._environment, self._on_log_message)
 
     def on_policy_cleared(self):
         self._api.destroy_environment(self._environment)
@@ -135,10 +135,10 @@ cdef class StandaloneEnvironmentPolicy:
     def get_current_environment(self):
         return self._environment
 
-    def set_environment(self, environment):
+    def set_environment(self, EnvironmentData environment):
         return self._environment
 
-    def is_alive(self, environment):
+    def is_alive(self, EnvironmentData environment):
         return environment is self._environment
 
 
@@ -2926,7 +2926,7 @@ class PythonVSScriptLoggingBridge(logging.Handler):
         core.log_message(mt, message)
 
 @cython.final
-cdef class VSScriptEnvironmentPolicy:
+cdef class VSScriptEnvironmentPolicy(EnvironmentPolicy):
     cdef dict _env_map
 
     cdef object _stack

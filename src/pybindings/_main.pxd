@@ -30,7 +30,7 @@ cdef class EnvironmentData:
 
 cdef class EnvironmentPolicy:
     pass
-cdef class StandaloneEnvironmentPolicy:
+cdef class StandaloneEnvironmentPolicy(EnvironmentPolicy):
     cdef EnvironmentPolicyAPI _api
     cdef EnvironmentData _environment
     cdef int _flags
