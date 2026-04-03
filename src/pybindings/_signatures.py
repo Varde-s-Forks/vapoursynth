@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 import inspect
 import keyword
@@ -90,9 +92,8 @@ def construct_signature(
         return_annotation = return_annotations.pop().annotation
     else:
         ret_dict_name = f"_ReturnDict_{name}" if name else "_ReturnDict"
-        return_annotation = typing.TypedDict(
-            ret_dict_name, {ret_ann.name: ret_ann.annotation for ret_ann in return_annotations}, total=True
-        )
+        fields = {ret_ann.name: ret_ann.annotation for ret_ann in return_annotations}
+        return_annotation = typing.TypedDict(ret_dict_name, fields) # pyright: ignore[reportArgumentType]
         return_annotation.__module__ = Exception.__module__
 
     return inspect.Signature(tuple(params), return_annotation=return_annotation)
