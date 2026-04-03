@@ -2705,7 +2705,7 @@ cdef Core createCore2(VSCore *core):
         instance.log_message(mtWarning, f'Version mismatch: The VapourSynth Python module version is R{__version__.release_major:d} but the VapourSynth core library is R{instance.core_version.release_major:d}. This usually indicates a broken install.')
     return instance
 
-cdef Core _get_core(threads = None):
+cdef Core _get_core():
     env = _env_current()
     if env is None:
         raise Error('No environment is currently activated. Please activate an environment. (Hint: get_current_environment().use() allows you to temporary select an environment of your choice.)')
