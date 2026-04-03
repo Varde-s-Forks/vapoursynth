@@ -374,7 +374,7 @@ cdef class Environment:
         return self.is_single()
 
     @classmethod
-    def is_single(self):
+    def is_single(cls):
         return not has_policy() or isinstance(_policy, StandaloneEnvironmentPolicy)
 
     @property
