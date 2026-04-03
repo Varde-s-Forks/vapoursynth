@@ -18,7 +18,7 @@
 #
 """ This is the VapourSynth module implementing the Python bindings. """
 
-import cython
+cimport cython
 from cpython.buffer cimport PyBUF_SIMPLE, PyBuffer_FillInfo, PyBuffer_Release
 from cpython.memoryview cimport PyMemoryView_FromObject
 from cpython.number cimport PyIndex_Check, PyNumber_Index
