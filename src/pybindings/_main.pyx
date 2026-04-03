@@ -231,18 +231,16 @@ cdef class EnvironmentPolicyAPI:
         self.ensure_policy_matches()
 
         cdef EnvironmentData env = EnvironmentData.__new__(EnvironmentData)
-        env.core = None
+        env.core = <Core>None
         env.log = NULL
         env.outputs = {}
         env.coreCreationFlags = flags
         env.on_destroy = []
         env.env_locals = weakref.WeakKeyDictionary()
-        env.alive = True
+        env.alive = <bint>True
 
         with self._lock:
-            counter = self._known_environments_counter
-            self._known_environments_counter += 1
-            self._known_environments[counter] = env
+            self._known_environments.add(env)
 
         return env
 
@@ -284,7 +282,7 @@ cdef class EnvironmentPolicyAPI:
 
     def unregister_policy(self):
         self.ensure_policy_matches()
-        for environment in self._known_environments.values():
+        for environment in self._known_environments:
             self.destroy_environment(environment)
         clear_policy(delay=False)
 
@@ -307,7 +305,7 @@ def register_policy(policy):
     # Expose Additional API-calls to the newly registered Environment-policy.
     cdef EnvironmentPolicyAPI _api = EnvironmentPolicyAPI.__new__(EnvironmentPolicyAPI)
     _api._target_policy = weakref.ref(_policy)
-    _api._known_environments = weakref.WeakValueDictionary()
+    _api._known_environments = weakref.WeakSet()
     _api._lock = threading.Lock()
     _policy.on_policy_registered(_api)
 
