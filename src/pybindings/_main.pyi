@@ -1,781 +1,1230 @@
-from abc import abstractmethod
+# This file is auto-generated. DO NOT EDIT.
+# ruff: noqa
+# flake8: noqa
+# fmt: off
+# isort: skip_file
+
+from collections.abc import Buffer, Callable, Iterable, Iterator, Mapping, MutableMapping
+from concurrent.futures import Future
 from ctypes import c_void_p
-from enum import IntEnum, IntFlag
 from fractions import Fraction
 from inspect import Signature
 from types import MappingProxyType, TracebackType
-from typing import (
-    TYPE_CHECKING, Any, BinaryIO, Callable, ContextManager, Dict, Generic, Iterator, Literal,
-    MutableMapping, NamedTuple, NoReturn, Optional, Protocol, Sequence, Tuple, Type, TypedDict,
-    TypeVar, Union, cast, overload, runtime_checkable
-)
+from typing import Any, Concatenate, Final, IO, Literal, NamedTuple, Protocol, Self, SupportsFloat, SupportsIndex, SupportsInt, TypedDict, final, overload
+from typing_extensions import deprecated  # Can be replaced by from warnings for 3.13 and above
 from weakref import ReferenceType
+from logging import Handler, LogRecord, StreamHandler
+from typing import TextIO
+
+from ._constants import *
 
 __all__ = [
-    # Versioning
-    '__version__', '__api_version__', 'PluginVersion',
-
-    # Enums and constants
-    'MessageType',
-        'MESSAGE_TYPE_DEBUG', 'MESSAGE_TYPE_INFORMATION', 'MESSAGE_TYPE_WARNING',
-        'MESSAGE_TYPE_CRITICAL', 'MESSAGE_TYPE_FATAL',
-
-    'FilterMode',
-        'fmParallel', 'fmParallelRequests', 'fmUnordered', 'fmFrameState',
-
-    'CoreCreationFlags',
-        'ccfEnableGraphInspection', 'ccfDisableAutoLoading', 'ccfDisableLibraryUnloading',
-
-    'MediaType',
-        'VIDEO', 'AUDIO',
-
-    'ColorFamily',
-        'UNDEFINED', 'GRAY', 'RGB', 'YUV',
-
-    'ColorRange',
-        'RANGE_FULL', 'RANGE_LIMITED',
-
-    'SampleType',
-        'INTEGER', 'FLOAT',
-
-    'PresetVideoFormat',
-        'GRAY',
-        'GRAY8', 'GRAY9', 'GRAY10', 'GRAY12', 'GRAY14', 'GRAY16', 'GRAY32', 'GRAYH', 'GRAYS',
-        'RGB',
-        'RGB24', 'RGB27', 'RGB30', 'RGB36', 'RGB42', 'RGB48', 'RGBH', 'RGBS',
-        'YUV',
-        'YUV410P8',
-        'YUV411P8',
-        'YUV420P8', 'YUV420P9', 'YUV420P10', 'YUV420P12', 'YUV420P14', 'YUV420P16',
-        'YUV422P8', 'YUV422P9', 'YUV422P10', 'YUV422P12', 'YUV422P14', 'YUV422P16',
-        'YUV440P8',
-        'YUV444P8', 'YUV444P9', 'YUV444P10', 'YUV444P12', 'YUV444P14', 'YUV444P16',
-        'YUV420PH', 'YUV422PH', 'YUV444PH',
-        'YUV420PS', 'YUV422PS', 'YUV444PS',
-        'NONE',
-
-    'AudioChannels',
-        'FRONT_LEFT', 'FRONT_RIGHT', 'FRONT_CENTER',
-        'BACK_LEFT', 'BACK_RIGHT', 'BACK_CENTER',
-        'SIDE_LEFT', 'SIDE_RIGHT',
-        'TOP_CENTER',
-
-        'TOP_FRONT_LEFT', 'TOP_FRONT_RIGHT', 'TOP_FRONT_CENTER',
-        'TOP_BACK_LEFT', 'TOP_BACK_RIGHT', 'TOP_BACK_CENTER',
-
-        'WIDE_LEFT', 'WIDE_RIGHT',
-
-        'SURROUND_DIRECT_LEFT', 'SURROUND_DIRECT_RIGHT',
-
-        'FRONT_LEFT_OF_CENTER', 'FRONT_RIGHT_OF_CENTER',
-
-        'STEREO_LEFT', 'STEREO_RIGHT',
-
-        'LOW_FREQUENCY', 'LOW_FREQUENCY2',
-
-    'ChromaLocation',
-        'CHROMA_TOP_LEFT', 'CHROMA_TOP',
-        'CHROMA_LEFT', 'CHROMA_CENTER',
-        'CHROMA_BOTTOM_LEFT', 'CHROMA_BOTTOM',
-
-    'FieldBased',
-        'FIELD_PROGRESSIVE', 'FIELD_TOP', 'FIELD_BOTTOM',
-
-    'MatrixCoefficients',
-        'MATRIX_RGB', 'MATRIX_BT709', 'MATRIX_UNSPECIFIED', 'MATRIX_FCC',
-        'MATRIX_BT470_BG', 'MATRIX_ST170_M', 'MATRIX_ST240_M', 'MATRIX_YCGCO', 'MATRIX_BT2020_NCL', 'MATRIX_BT2020_CL',
-        'MATRIX_CHROMATICITY_DERIVED_NCL', 'MATRIX_CHROMATICITY_DERIVED_CL', 'MATRIX_ICTCP',
-
-    'TransferCharacteristics',
-        'TRANSFER_BT709', 'TRANSFER_UNSPECIFIED', 'TRANSFER_BT470_M', 'TRANSFER_BT470_BG', 'TRANSFER_BT601',
-        'TRANSFER_ST240_M', 'TRANSFER_LINEAR', 'TRANSFER_LOG_100', 'TRANSFER_LOG_316', 'TRANSFER_IEC_61966_2_4',
-        'TRANSFER_IEC_61966_2_1', 'TRANSFER_BT2020_10', 'TRANSFER_BT2020_12', 'TRANSFER_ST2084', 'TRANSFER_ST428',
-        'TRANSFER_ARIB_B67',
-
-    'ColorPrimaries', 'PRIMARIES_BT709', 'PRIMARIES_UNSPECIFIED',
-        'PRIMARIES_BT470_M', 'PRIMARIES_BT470_BG', 'PRIMARIES_ST170_M', 'PRIMARIES_ST240_M', 'PRIMARIES_FILM',
-        'PRIMARIES_BT2020', 'PRIMARIES_ST428', 'PRIMARIES_ST431_2', 'PRIMARIES_ST432_1', 'PRIMARIES_EBU3213_E',
-
-    # Environment SubSystem
-    'Environment', 'EnvironmentData',
-
-    'EnvironmentPolicy',
-
-    'EnvironmentPolicyAPI',
-    'register_policy', 'has_policy',
-    'register_on_destroy', 'unregister_on_destroy',
-
-    'get_current_environment',
-
-    'VideoOutputTuple',
-    'clear_output', 'clear_outputs', 'get_outputs', 'get_output',
-
-    # Logging
-    'LogHandle', 'Error',
-
-    # Functions
-    'FuncData', 'Func', 'FramePtr',
-    'Plugin', 'Function',
-
-    # Formats
-    'VideoFormat', 'ChannelLayout',
-
-    # Frames
-    'RawFrame', 'VideoFrame', 'AudioFrame',
-    'FrameProps',
-
-    # Nodes
-    'RawNode', 'VideoNode', 'AudioNode',
-
-    'Core', '_CoreProxy', 'core',
-
-    # Inspection API [UNSTABLE API]
-    # '_try_enable_introspection'
+    "clear_output",
+    "clear_outputs",
+    "core",
+    "get_output",
+    "get_outputs"
 ]
 
+type _AnyStr = str | bytes | bytearray
+type _IntLike = SupportsInt | SupportsIndex | Buffer
+type _FloatLike = SupportsFloat | SupportsIndex | Buffer
 
-###
-# Typing
+type _VSValueSingle = (
+    int | float | _AnyStr | RawFrame | VideoFrame | AudioFrame | RawNode | VideoNode | AudioNode | Callable[..., Any]
+)
 
-T = TypeVar('T')
-S = TypeVar('S')
+type _VSValueIterable = (
+    _SupportsIter[_IntLike]
+    | _SupportsIter[_FloatLike]
+    | _SupportsIter[_AnyStr]
+    | _SupportsIter[RawFrame]
+    | _SupportsIter[VideoFrame]
+    | _SupportsIter[AudioFrame]
+    | _SupportsIter[RawNode]
+    | _SupportsIter[VideoNode]
+    | _SupportsIter[AudioNode]
+    | _SupportsIter[Callable[..., Any]]
+    | _GetItemIterable[_IntLike]
+    | _GetItemIterable[_FloatLike]
+    | _GetItemIterable[_AnyStr]
+    | _GetItemIterable[RawFrame]
+    | _GetItemIterable[VideoFrame]
+    | _GetItemIterable[AudioFrame]
+    | _GetItemIterable[RawNode]
+    | _GetItemIterable[VideoNode]
+    | _GetItemIterable[AudioNode]
+    | _GetItemIterable[Callable[..., Any]]
+)
+type _VSValue = _VSValueSingle | _VSValueIterable
 
-SingleAndSequence = Union[T, Sequence[T]]
+class _SupportsIter[T](Protocol):
+    def __iter__(self) -> Iterator[T]: ...
+
+class _SequenceLike[T](Protocol):
+    def __iter__(self) -> Iterator[T]: ...
+    def __len__(self) -> int: ...
+
+class _GetItemIterable[T](Protocol):
+    def __getitem__(self, i: SupportsIndex, /) -> T: ...
+
+class _SupportsKeysAndGetItem[KT, VT](Protocol):
+    def __getitem__(self, key: KT, /) -> VT: ...
+    def keys(self) -> Iterable[KT]: ...
+
+class _VSCallback(Protocol):
+    def __call__(self, *args: Any, **kwargs: Any) -> _VSValue: ...
+
+# Known callback signatures
+# _VSCallback_{plugin_namespace}_{Function_name}_{parameter_name}
+class _VSCallback_akarin_PropExpr_dict(Protocol):
+    def __call__(
+        self,
+    ) -> Mapping[
+        str,
+        _IntLike
+        | _FloatLike
+        | _AnyStr
+        | _SupportsIter[_IntLike]
+        | _SupportsIter[_AnyStr]
+        | _SupportsIter[_FloatLike]
+        | _GetItemIterable[_IntLike]
+        | _GetItemIterable[_FloatLike]
+        | _GetItemIterable[_AnyStr],
+    ]: ...
+
+class _VSCallback_descale_Decustom_custom_kernel(Protocol):
+    def __call__(self, *, x: float) -> _FloatLike: ...
+
+class _VSCallback_descale_ScaleCustom_custom_kernel(Protocol):
+    def __call__(self, *, x: float) -> _FloatLike: ...
+
+class _VSCallback_std_FrameEval_eval_0(Protocol):
+    def __call__(self, *, n: int) -> VideoNode: ...
+
+class _VSCallback_std_FrameEval_eval_1(Protocol):
+    def __call__(self, *, n: int, f: VideoFrame) -> VideoNode: ...
+
+class _VSCallback_std_FrameEval_eval_2(Protocol):
+    def __call__(self, *, n: int, f: list[VideoFrame]) -> VideoNode: ...
+
+class _VSCallback_std_FrameEval_eval_3(Protocol):
+    def __call__(self, *, n: int, f: VideoFrame | list[VideoFrame]) -> VideoNode: ...
+
+type _VSCallback_std_FrameEval_eval = (  # noqa: PYI047
+    _VSCallback_std_FrameEval_eval_0
+    | _VSCallback_std_FrameEval_eval_1
+    | _VSCallback_std_FrameEval_eval_2
+    | _VSCallback_std_FrameEval_eval_3
+)
+
+class _VSCallback_std_Lut_function_0(Protocol):
+    def __call__(self, *, x: int) -> _IntLike: ...
+
+class _VSCallback_std_Lut_function_1(Protocol):
+    def __call__(self, *, x: float) -> _FloatLike: ...
+
+type _VSCallback_std_Lut_function = _VSCallback_std_Lut_function_0 | _VSCallback_std_Lut_function_1  # noqa: PYI047
+
+class _VSCallback_std_Lut2_function_0(Protocol):
+    def __call__(self, *, x: int, y: int) -> _IntLike: ...
+
+class _VSCallback_std_Lut2_function_1(Protocol):
+    def __call__(self, *, x: float, y: float) -> _FloatLike: ...
+
+type _VSCallback_std_Lut2_function = _VSCallback_std_Lut2_function_0 | _VSCallback_std_Lut2_function_1  # noqa: PYI047
+
+class _VSCallback_std_ModifyFrame_selector_0(Protocol):
+    def __call__(self, *, n: int, f: VideoFrame) -> VideoFrame: ...
+
+class _VSCallback_std_ModifyFrame_selector_1(Protocol):
+    def __call__(self, *, n: int, f: list[VideoFrame]) -> VideoFrame: ...
+
+class _VSCallback_std_ModifyFrame_selector_2(Protocol):
+    def __call__(self, *, n: int, f: VideoFrame | list[VideoFrame]) -> VideoFrame: ...
+
+type _VSCallback_std_ModifyFrame_selector = (  # noqa: PYI047
+    _VSCallback_std_ModifyFrame_selector_0
+    | _VSCallback_std_ModifyFrame_selector_1
+    | _VSCallback_std_ModifyFrame_selector_2
+)
+
+class _VSCallback_resize2_Custom_custom_kernel(Protocol):
+    def __call__(self, *, x: float) -> _FloatLike: ...
+
+class LogHandle: ...
 
 
-@runtime_checkable
-class SupportsString(Protocol):
-    @abstractmethod
-    def __str__(self) -> str:
-        ...
+
+class Error(Exception):
+    value: Any
+    def __init__(self, value: Any) -> None: ...
+    def __str__(self) -> str: ...
+    def __repr__(self) -> str: ...
+
+# Environment SubSystem
+@final
+class EnvironmentData: ...
+
+class EnvironmentPolicy:
+    def on_policy_registered(self, special_api: EnvironmentPolicyAPI) -> None: ...
+    def on_policy_cleared(self) -> None: ...
+    def get_current_environment(self) -> EnvironmentData | None: ...
+    def set_environment(self, environment: EnvironmentData | None) -> EnvironmentData | None: ...
+    def is_alive(self, environment: EnvironmentData) -> bool: ...
+
+@final
+class StandaloneEnvironmentPolicy:
+    def on_policy_registered(self, api: EnvironmentPolicyAPI) -> None: ...
+    def on_policy_cleared(self) -> None: ...
+    def get_current_environment(self) -> EnvironmentData: ...
+    def set_environment(self, environment: EnvironmentData | None) -> EnvironmentData: ...
+    def is_alive(self, environment: EnvironmentData) -> bool: ...
+    def _on_log_message(self, level: MessageType, msg: str) -> None: ...
+
+@final
+class EnvironmentPolicyAPI:
+    def wrap_environment(self, environment_data: EnvironmentData) -> Environment: ...
+    def create_environment(self, flags: _IntLike = 0) -> EnvironmentData: ...
+    def set_logger(self, env: EnvironmentData, logger: Callable[[int, str], None]) -> None: ...
+    def get_vapoursynth_api(self, version: int) -> c_void_p: ...
+    def get_core_ptr(self, environment_data: EnvironmentData) -> c_void_p: ...
+    def destroy_environment(self, env: EnvironmentData) -> None: ...
+    def unregister_policy(self) -> None: ...
+
+def register_policy(policy: EnvironmentPolicy) -> None: ...
+def has_policy() -> bool: ...
+def register_on_destroy(callback: Callable[..., None]) -> None: ...
+def unregister_on_destroy(callback: Callable[..., None]) -> None: ...
+def _try_enable_introspection(version: int | None = None) -> bool: ...
+
+@final
+class _FastManager:
+    def __enter__(self) -> None: ...
+    def __exit__(self, *_: object) -> None: ...
+
+class Environment:
+    env: Final[ReferenceType[EnvironmentData]]
+    def __repr__(self) -> str: ...
+    @overload
+    def __eq__(self, other: Environment) -> bool: ...
+    @overload
+    def __eq__(self, other: object) -> bool: ...
+    @property
+    def alive(self) -> bool: ...
+    @property
+    def single(self) -> bool: ...
+    @classmethod
+    def is_single(cls) -> bool: ...
+    @property
+    def env_id(self) -> int: ...
+    @property
+    def active(self) -> bool: ...
+    def copy(self) -> Self: ...
+    def use(self) -> _FastManager: ...
+
+class Local:
+    def __getattr__(self, key: str) -> Any: ...
+    def __setattr__(self, key: str, value: Any) -> None: ...
+    def __delattr__(self, key: str) -> None: ...
+
+def get_current_environment() -> Environment: ...
+
+class CoreTimings:
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    @property
+    def enabled(self) -> bool: ...
+    @enabled.setter
+    def enabled(self, enabled: bool) -> bool: ...
+    @property
+    def freed_nodes(self) -> bool: ...
+    @freed_nodes.setter
+    def freed_nodes(self, value: Literal[0]) -> bool: ...
 
 
-DataType = Union[str, bytes, bytearray, SupportsString]
-
-_VapourSynthMapValue = Union[
-    SingleAndSequence[int],
-    SingleAndSequence[float],
-    SingleAndSequence[DataType],
-    SingleAndSequence['VideoNode'],
-    SingleAndSequence['VideoFrame'],
-    SingleAndSequence['AudioNode'],
-    SingleAndSequence['AudioFrame'],
-    SingleAndSequence['VSMapValueCallback[Any]']
-]
-
-BoundVSMapValue = TypeVar('BoundVSMapValue', bound=_VapourSynthMapValue)
-
-VSMapValueCallback = Callable[..., BoundVSMapValue]
-
-
-class _Future(Generic[T]):
-    def set_result(self, value: T) -> None: ...
-
-    def set_exception(self, exception: BaseException) -> None: ...
-
-    def result(self) -> T: ...
-
-    def exception(self) -> Union[NoReturn, None]: ...
-
-###
-# Typed dicts
-
-
-class _VideoFormatInfo(TypedDict):
+class _VideoFormatDict(TypedDict):
     id: int
     name: str
-    color_family: 'ColorFamily'
-    sample_type: 'SampleType'
-    bits_per_sample: int
+    color_family: ColorFamily
+    sample_type: SampleType
+    bits_per_sample: Literal[
+        8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+    ]
     bytes_per_sample: int
-    subsampling_w: int
-    subsampling_h: int
-    num_planes: int
+    subsampling_w: Literal[0, 1, 2, 3, 4]
+    subsampling_h: Literal[0, 1, 2, 3, 4]
+    num_planes: Literal[1, 3]
 
+class VideoFormat:
+    id: Final[int]
+    name: Final[str]
+    color_family: Final[ColorFamily]
+    sample_type: Final[SampleType]
+    bits_per_sample: Final[
+        Literal[8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+    ]
+    bytes_per_sample: Final[int]
+    subsampling_w: Final[Literal[0, 1, 2, 3, 4]]
+    subsampling_h: Final[Literal[0, 1, 2, 3, 4]]
+    num_planes: Final[Literal[1, 3]]
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+    def __int__(self) -> int: ...
+    def replace(
+        self,
+        *,
+        color_family: ColorFamily = ...,
+        sample_type: SampleType = ...,
+        bits_per_sample: _IntLike = ...,
+        subsampling_w: _IntLike = ...,
+        subsampling_h: _IntLike = ...,
+    ) -> Self: ...
+    def _as_dict(self) -> _VideoFormatDict: ...
 
-###
-# VapourSynth Versioning
+# Behave like a Collection
+class ChannelLayout(int):
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __contains__(self, layout: AudioChannels) -> bool: ...
+    def __iter__(self) -> Iterator[AudioChannels]: ...
+    def __len__(self) -> int: ...
 
+type _PropValue = (
+    int
+    | float
+    | str
+    | bytes
+    | RawFrame
+    | VideoFrame
+    | AudioFrame
+    | RawNode
+    | VideoNode
+    | AudioNode
+    | Callable[..., Any]
+    | list[int]
+    | list[float]
+    | list[str]
+    | list[bytes]
+    | list[RawFrame]
+    | list[VideoFrame]
+    | list[AudioFrame]
+    | list[RawNode]
+    | list[VideoNode]
+    | list[AudioNode]
+    | list[Callable[..., Any]]
+)
 
-class VapourSynthVersion(NamedTuple):
-    release_major: int
-    release_minor: int
+# Only the _PropValue types are allowed in FrameProps but passing _VSValue is allowed.
+# Just keep in mind that _SupportsIter and _GetItemIterable will only yield their keys if they're Mapping-like.
+# Consider storing Mapping-likes as two separate props. One for the keys and one for the values as list.
+class FrameProps(MutableMapping[str, _PropValue]):
+    def __repr__(self) -> str: ...
+    def __dir__(self) -> list[str]: ...
+    @overload
+    def __getitem__(
+        self,
+        name: Literal[
+            "_ChromaLocation",
+            "_Range",
+            "_Primaries",
+            "_Matrix",
+            "_Transfer",
+            "_FieldBased",
+            "_DurationNum",
+            "_DurationDen",
+            "_Combed",
+            "_Field",
+            "_SARNum",
+            "_SARDen",
+            "_SceneChangeNext",
+            "_SceneChangePrev",
+        ],
+    ) -> int: ...
+    @overload
+    def __getitem__(self, name: Literal["_AbsoluteTime"]) -> float: ...
+    @overload
+    def __getitem__(self, name: Literal["_PictType"]) -> bytes: ...
+    @overload
+    def __getitem__(self, name: Literal["_Alpha"]) -> VideoFrame: ...
+    @overload
+    def __getitem__(self, name: str) -> _PropValue: ...
+    def __setitem__(self, name: str, value: _VSValue) -> None: ...
+    def __delitem__(self, name: str) -> None: ...
+    def __iter__(self) -> Iterator[str]: ...
+    def __len__(self) -> int: ...
+    def __setattr__(self, name: str, value: _VSValue) -> None: ...
+    def __delattr__(self, name: str) -> None: ...
+    def __getattr__(self, name: str) -> _PropValue: ...
+    @overload
+    def setdefault(self, key: str, default: Literal[0] = 0, /) -> _PropValue | Literal[0]: ...
+    @overload
+    def setdefault(self, key: str, default: _VSValue, /) -> _PropValue: ...  # pyright: ignore[reportIncompatibleMethodOverride]
+    def copy(self) -> dict[str, _PropValue]: ...
+    @overload  # type: ignore[override]
+    def get(
+        self,
+        key: Literal[
+            "_ChromaLocation",
+            "_Range",
+            "_Primaries",
+            "_Matrix",
+            "_Transfer",
+            "_FieldBased",
+            "_DurationNum",
+            "_DurationDen",
+            "_Combed",
+            "_Field",
+            "_SARNum",
+            "_SARDen",
+            "_SceneChangeNext",
+            "_SceneChangePrev",
+        ],
+        /,
+    ) -> int | None: ...
+    @overload
+    def get[T](
+        self,
+        key: Literal[
+            "_ChromaLocation",
+            "_Range",
+            "_Primaries",
+            "_Matrix",
+            "_Transfer",
+            "_FieldBased",
+            "_DurationNum",
+            "_DurationDen",
+            "_Combed",
+            "_Field",
+            "_SARNum",
+            "_SARDen",
+            "_SceneChangeNext",
+            "_SceneChangePrev",
+        ],
+        default: T,
+        /,
+    ) -> int | T: ...
+    @overload
+    def get(self, key: Literal["_AbsoluteTime"], /) -> float | None: ...
+    @overload
+    def get[T](self, key: Literal["_AbsoluteTime"], default: T, /) -> float | T: ...
+    @overload
+    def get(self, key: Literal["_PictType"], /) -> bytes | None: ...
+    @overload
+    def get[T](self, key: Literal["_PictType"], default: T, /) -> bytes | T: ...
+    @overload
+    def get(self, key: Literal["_Alpha"], /) -> VideoFrame | None: ...
+    @overload
+    def get[T](self, key: Literal["_Alpha"], default: T, /) -> VideoFrame | T: ...
+    @overload
+    def get(self, key: str, /) -> _PropValue | None: ...
+    @overload
+    def get[T](self, key: str, default: T, /) -> _PropValue | T: ...  # pyright: ignore[reportIncompatibleMethodOverride]
 
+class FuncData:
+    def __call__(self, **kwargs: Any) -> Any: ...
 
-class VapourSynthAPIVersion(NamedTuple):
-    api_major: int
-    api_minor: int
+class Func:
+    def __call__(self, **kwargs: Any) -> Any: ...
 
-
-__version__: VapourSynthVersion
-__api_version__: VapourSynthAPIVersion
-
-
-###
-# Plugin Versioning
-
+class Function:
+    plugin: Final[Plugin]
+    name: Final[str]
+    signature: Final[str]
+    return_signature: Final[str]
+    def __repr__(self) -> str: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
+    @property
+    def __signature__(self) -> Signature: ...
 
 class PluginVersion(NamedTuple):
     major: int
     minor: int
 
-###
-# VapourSynth Environment SubSystem
-
-
-class EnvironmentData:
-    def __init__(self) -> NoReturn: ...
-
-
-class EnvironmentPolicy:
-    def on_policy_registered(self, special_api: 'EnvironmentPolicyAPI') -> None: ...
-
-    def on_policy_cleared(self) -> None: ...
-
-    @abstractmethod
-    def get_current_environment(self) -> Union[EnvironmentData, None]: ...
-
-    @abstractmethod
-    def set_environment(self, environment: Union[EnvironmentData, None]) -> Union[EnvironmentData, None]: ...
-
-    def is_alive(self, environment: EnvironmentData) -> bool: ...
-
-
-class EnvironmentPolicyAPI:
-    def __init__(self) -> NoReturn: ...
-
-    def wrap_environment(self, environment_data: EnvironmentData) -> 'Environment': ...
-
-    def create_environment(self, flags: int = 0) -> EnvironmentData: ...
-
-    def set_logger(self, env: EnvironmentData, logger: Callable[[int, str], None]) -> None: ...
-
-    def get_vapoursynth_api(self, version: int) -> c_void_p: ...
-
-    def get_core_ptr(self, environment_data: EnvironmentData) -> c_void_p: ...
-
-    def destroy_environment(self, env: EnvironmentData) -> None: ...
-
-    def unregister_policy(self) -> None: ...
-
-
-def register_policy(policy: EnvironmentPolicy) -> None:
-    ...
-
-
-if not TYPE_CHECKING:
-    def _try_enable_introspection(version: int = None): ...
-
-
-def has_policy() -> bool:
-    ...
-
-
-def register_on_destroy(callback: Callable[..., None]) -> None:
-    ...
-
-
-def unregister_on_destroy(callback: Callable[..., None]) -> None:
-    ...
-
-
-class Environment:
-    env: ReferenceType[EnvironmentData]
-
-    def __init__(self) -> NoReturn: ...
-
-    @property
-    def alive(self) -> bool: ...
-
-    @property
-    def single(self) -> bool: ...
-
-    @classmethod
-    def is_single(cls) -> bool: ...
-
-    @property
-    def env_id(self) -> int: ...
-
-    @property
-    def active(self) -> bool: ...
-
-    def copy(self) -> 'Environment': ...
-
-    def use(self) -> ContextManager[None]: ...
-
-    def __eq__(self, other: 'Environment') -> bool: ...  # type: ignore[override]
+class Plugin:
+    identifier: Final[str]
+    namespace: Final[str]
+    name: Final[str]
 
     def __repr__(self) -> str: ...
-
-
-def get_current_environment() -> Environment:
-    ...
-
-
-class Local:
-    def __getattr__(self, key: str) -> Any: ...
-    
-    # Even though object does have set/del methods, typecheckers will treat them differently
-    # when they are not explicit; for example by raising a member not found warning.
-
-    def __setattr__(self, key: str, value: Any) -> None: ...
-    
-    def __delattr__(self, key: str) -> None: ...
-
-
-class VideoOutputTuple(NamedTuple):
-    clip: 'VideoNode'
-    alpha: Union['VideoNode', None]
-    alt_output: Literal[0, 1, 2]
-
-
-class Error(Exception):
-    ...
-
-
-def clear_output(index: int = 0) -> None:
-    ...
-
-
-def clear_outputs() -> None:
-    ...
-
-
-def get_outputs() -> MappingProxyType[int, Union[VideoOutputTuple, 'AudioNode']]:
-    ...
-
-
-def get_output(index: int = 0) -> Union[VideoOutputTuple, 'AudioNode']:
-    ...
-
-
-class FuncData:
-    def __init__(self) -> NoReturn: ...
-
-    def __call__(self, **kwargs: _VapourSynthMapValue) -> _VapourSynthMapValue: ...
-
-
-class Func:
-    def __init__(self) -> NoReturn: ...
-
-    def __call__(self, **kwargs: _VapourSynthMapValue) -> _VapourSynthMapValue: ...
-
-
-class FramePtr:
-    def __init__(self) -> NoReturn: ...
-
-
-class VideoFormat:
-    id: int
-    name: str
-    color_family: ColorFamily
-    sample_type: SampleType
-    bits_per_sample: int
-    bytes_per_sample: int
-    subsampling_w: int
-    subsampling_h: int
-    num_planes: int
-
-    def __init__(self) -> NoReturn: ...
-
-    def _as_dict(self) -> _VideoFormatInfo: ...
-
-    def replace(
-        self, *,
-        color_family: Union[ColorFamily, None] = None,
-        sample_type: Union[SampleType, None] = None,
-        bits_per_sample: Union[int, None] = None,
-        subsampling_w: Union[int, None] = None,
-        subsampling_h: Union[int, None] = None
-    ) -> 'VideoFormat': ...
-
-    @overload
-    def __eq__(self, other: 'VideoFormat') -> bool: ...
-
-    @overload
-    def __eq__(self, other: Any) -> Literal[False]: ...
-
-    def __int__(self) -> int: ...
-
-    def __hash__(self) -> int: ...
-
-
-class FrameProps(MutableMapping[str, _VapourSynthMapValue]):
-    def __init__(self) -> NoReturn: ...
-
-    def setdefault(
-        self, key: str, default: _VapourSynthMapValue = 0
-    ) -> _VapourSynthMapValue: ...
-
-    def copy(self) -> MutableMapping[str, _VapourSynthMapValue]: ...
-
-    # Since we're inheriting from the MutableMapping abstract class,
-    # we *have* to specify that we have indeed created these methods.
-    # If we don't, mypy will complain that we're working with abstract methods.
-
-    def __setattr__(self, name: str, value: _VapourSynthMapValue) -> None: ...
-
-    def __getattr__(self, name: str) -> _VapourSynthMapValue: ...
-
-    def __delattr__(self, name: str) -> None: ...
-
-    def __setitem__(self, name: str, value: _VapourSynthMapValue) -> None: ...
-
-    def __getitem__(self, name: str) -> _VapourSynthMapValue: ...
-
-    def __delitem__(self, name: str) -> None: ...
-
-    def __iter__(self) -> Iterator[str]: ...
-
-    def __len__(self) -> int: ...
-
-
-class ChannelLayout(int):
-    def __init__(self) -> NoReturn: ...
-
-    def __contains__(self, layout: AudioChannels) -> bool: ...
-
-    def __iter__(self) -> Iterator[AudioChannels]: ...
-
-    @overload
-    def __eq__(self, other: 'ChannelLayout') -> bool: ...
-
-    @overload
-    def __eq__(self, other: Any) -> Literal[False]: ...
-
-    def __len__(self) -> int: ...
-
-
-class audio_view(memoryview):  # type: ignore[misc]
-    @property
-    def shape(self) -> tuple[int]: ...
-
-    @property
-    def strides(self) -> tuple[int]: ...
-
-    @property
-    def ndim(self) -> Literal[1]: ...
-
-    @property
-    def obj(self) -> FramePtr: ...  # type: ignore[override]
-
-    def __getitem__(self, index: int) -> int | float: ...  # type: ignore[override]
-
-    def __setitem__(self, index: int, other: int | float) -> None: ...  # type: ignore[override]
-
-    def tolist(self) -> list[int | float]: ...  # type: ignore[override]
-
-
-class video_view(memoryview):  # type: ignore[misc]
-    @property
-    def shape(self) -> tuple[int, int]: ...
-
-    @property
-    def strides(self) -> tuple[int, int]: ...
-
-    @property
-    def ndim(self) -> Literal[2]: ...
-
-    @property
-    def obj(self) -> FramePtr: ...  # type: ignore[override]
-
-    def __getitem__(self, index: Tuple[int, int]) -> int | float: ...  # type: ignore[override]
-
-    def __setitem__(self, index: Tuple[int, int], other: int | float) -> None: ...  # type: ignore[override]
-
-    def tolist(self) -> list[int | float]: ...  # type: ignore[override]
-
-
-class RawFrame:
-    def __init__(self) -> None: ...
-
-    @property
-    def closed(self) -> bool: ...
-
-    def close(self) -> None: ...
-
-    def copy(self: 'SelfFrame') -> 'SelfFrame': ...
-
-    @property
-    def props(self) -> FrameProps: ...
-
-    @props.setter
-    def props(self, new_props: MappingProxyType[str, _VapourSynthMapValue]) -> None: ...
-
-    def get_write_ptr(self, plane: int) -> c_void_p: ...
-
-    def get_read_ptr(self, plane: int) -> c_void_p: ...
-
-    def get_stride(self, plane: int) -> int: ...
-
-    @property
-    def readonly(self) -> bool: ...
-
-    def __enter__(self: 'SelfFrame') -> 'SelfFrame': ...
-
-    def __exit__(
-        self, exc_type: Union[Type[BaseException], None],
-        exc_value: Union[BaseException, None],
-        traceback: Union[TracebackType, None], /,
-    ) -> Union[bool, None]: ...
-
-    def __getitem__(self, index: int) -> memoryview: ...
-
-    def __len__(self) -> int: ...
-
-
-SelfFrame = TypeVar('SelfFrame', bound=RawFrame)
-
-
-class VideoFrame(RawFrame):
-    format: VideoFormat
-    width: int
-    height: int
-
-    def readchunks(self) -> Iterator[video_view]: ...
-
-    def __getitem__(self, index: int) -> video_view: ...
-
-
-class AudioFrame(RawFrame):
-    sample_type: SampleType
-    bits_per_sample: int
-    bytes_per_sample: int
-    channel_layout: int
-    num_channels: int
-
-    @property
-    def channels(self) -> ChannelLayout: ...
-
-    def __getitem__(self, index: int) -> audio_view: ...
-
-#include <plugins/implementations>
-
-
-class RawNode:
-    def __init__(self) -> None: ...
-
-    def get_frame(self, n: int) -> RawFrame: ...
-
-    @overload
-    def get_frame_async(self, n: int, cb: None = None) -> _Future[RawFrame]: ...
-
-    @overload
-    def get_frame_async(self, n: int, cb: Callable[[Union[RawFrame, None], Union[Exception, None]], None]) -> None: ...
-
-    def frames(
-        self, prefetch: Union[int, None] = None, backlog: Union[int, None] = None, close: bool = False
-    ) -> Iterator[RawFrame]: ...
-
-    def clear_cache(self) -> None: ...
-
-    def set_output(self, index: int = 0) -> None: ...
-
-    def is_inspectable(self, version: Union[int, None] = None) -> bool: ...
-
-    if not TYPE_CHECKING:
-        @property
-        def _node_name(self) -> str: ...
-
-        @property
-        def _name(self) -> str: ...
-
-        @property
-        def _inputs(self) -> Dict[str, _VapourSynthMapValue]: ...
-
-        @property
-        def _timings(self) -> int: ...
-
-        @property
-        def _mode(self) -> FilterMode: ...
-
-        @property
-        def _dependencies(self): ...
-
-    @overload
-    def __eq__(self: 'SelfRawNode', other: 'SelfRawNode', /) -> bool: ...
-
-    @overload
-    def __eq__(self, other: Any, /) -> Literal[False]: ...
-
-    def __add__(self: 'SelfRawNode', other: 'SelfRawNode', /) -> 'SelfRawNode': ...
-
-    def __radd__(self: 'SelfRawNode', other: 'SelfRawNode', /) -> 'SelfRawNode': ...
-
-    def __mul__(self: 'SelfRawNode', other: int) -> 'SelfRawNode': ...
-
-    def __rmul__(self: 'SelfRawNode', other: int) -> 'SelfRawNode': ...
-
-    def __getitem__(self: 'SelfRawNode', index: Union[int, slice], /) -> 'SelfRawNode': ...
-
-    def __len__(self) -> int: ...
-
-
-SelfRawNode = TypeVar('SelfRawNode', bound=RawNode)
-
-
-class VideoNode(RawNode):
-    format: VideoFormat
-
-    width: int
-    height: int
-
-    fps_num: int
-    fps_den: int
-
-    fps: Fraction
-
-    num_frames: int
-
-    def set_output(
-        self, index: int = 0, alpha: Union['VideoNode', None] = None, alt_output: Literal[0, 1, 2] = 0
-    ) -> None: ...
-
-    def output(
-        self, fileobj: BinaryIO, y4m: bool = False, progress_update: Callable[[int, int], None] | None = None,
-        prefetch: int = 0, backlog: int = -1
-    ) -> None: ...
-
-    def get_frame(self, n: int) -> VideoFrame: ...
-
-    @overload  # type: ignore[override]
-    def get_frame_async(self, n: int, cb: None = None) -> _Future[VideoFrame]: ...
-
-    @overload
-    def get_frame_async(self, n: int, cb: Callable[[Union[VideoFrame, None], Union[Exception, None]], None]) -> None: ...
-
-    def frames(
-        self, prefetch: Union[int, None] = None, backlog: Union[int, None] = None, close: bool = False
-    ) -> Iterator[VideoFrame]: ...
-
-#include <plugins/bound/VideoNode>
-
-
-class AudioNode(RawNode):
-    sample_type: SampleType
-    bits_per_sample: int
-    bytes_per_sample: int
-
-    channel_layout: int
-    num_channels: int
-
-    sample_rate: int
-    num_samples: int
-
-    num_frames: int
-
-    @property
-    def channels(self) -> ChannelLayout: ...
-
-    def get_frame(self, n: int) -> AudioFrame: ...
-
-    @overload  # type: ignore[override]
-    def get_frame_async(self, n: int, cb: None = None) -> _Future[AudioFrame]: ...
-
-    @overload
-    def get_frame_async(self, n: int, cb: Callable[[Union[AudioFrame, None], Union[Exception, None]], None]) -> None: ...
-
-    def frames(
-        self, prefetch: Union[int, None] = None, backlog: Union[int, None] = None, close: bool = False
-    ) -> Iterator[AudioFrame]: ...
-
-#include <plugins/bound/AudioNode>
-
-
-class LogHandle:
-    def __init__(self) -> NoReturn: ...
-
-
-class Function:
-    plugin: 'Plugin'
-    name: str
-    signature: str
-    return_signature: str
-
-    def __init__(self) -> NoReturn: ...
-
-    def __call__(self, *args: _VapourSynthMapValue, **kwargs: _VapourSynthMapValue) -> _VapourSynthMapValue: ...
-
-    @property
-    def __signature__(self) -> Signature: ...
-
-
-class Plugin:
-    identifier: str
-    namespace: str
-    name: str
-
-    def __init__(self) -> NoReturn: ...
-
+    def __dir__(self) -> list[str]: ...
     def __getattr__(self, name: str) -> Function: ...
-
-    def functions(self) -> Iterator[Function]: ...
-
     @property
     def version(self) -> PluginVersion: ...
-
     @property
     def plugin_path(self) -> str: ...
+    def functions(self) -> Iterator[Function]: ...
 
+_VSPlugin = Plugin
+_VSFunction = Function
+
+class _Wrapper:
+    class Function[**P, R](_VSFunction):
+        def __init__[PluginT: Plugin](self, function: Callable[Concatenate[PluginT, P], R]) -> None: ...
+        def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+class _Wrapper_Core_bound_FrameEval:
+    class Function(_VSFunction):
+        def __init__[PluginT: Plugin](self, function: Callable[Concatenate[PluginT, ...], VideoNode]) -> None: ...
+        @overload
+        def __call__(
+            self,
+            clip: VideoNode,
+            eval: _VSCallback_std_FrameEval_eval_0,
+            prop_src: None = None,
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            clip: VideoNode,
+            eval: _VSCallback_std_FrameEval_eval_1,
+            prop_src: VideoNode,
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            clip: VideoNode,
+            eval: _VSCallback_std_FrameEval_eval_2,
+            prop_src: _SequenceLike[VideoNode],
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            clip: VideoNode,
+            eval: _VSCallback_std_FrameEval_eval_3,
+            prop_src: VideoNode | _SequenceLike[VideoNode],
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            clip: VideoNode,
+            eval: _VSCallback_std_FrameEval_eval,
+            prop_src: VideoNode | _SequenceLike[VideoNode] | None,
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+
+class _Wrapper_VideoNode_bound_FrameEval:
+    class Function(_VSFunction):
+        def __init__[PluginT: Plugin](self, function: Callable[Concatenate[PluginT, ...], VideoNode]) -> None: ...
+        @overload
+        def __call__(
+            self,
+            eval: _VSCallback_std_FrameEval_eval_0,
+            prop_src: None = None,
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            eval: _VSCallback_std_FrameEval_eval_1,
+            prop_src: VideoNode,
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            eval: _VSCallback_std_FrameEval_eval_2,
+            prop_src: _SequenceLike[VideoNode],
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            eval: _VSCallback_std_FrameEval_eval_3,
+            prop_src: VideoNode | _SequenceLike[VideoNode],
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            eval: _VSCallback_std_FrameEval_eval,
+            prop_src: VideoNode | _SequenceLike[VideoNode] | None,
+            clip_src: VideoNode | _SequenceLike[VideoNode] | None = None,
+        ) -> VideoNode: ...
+
+class _Wrapper_Core_bound_ModifyFrame:
+    class Function(_VSFunction):
+        def __init__[PluginT: Plugin](self, function: Callable[Concatenate[PluginT, ...], VideoNode]) -> None: ...
+        @overload
+        def __call__(
+            self, clip: VideoNode, clips: VideoNode, selector: _VSCallback_std_ModifyFrame_selector_0
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self, clip: VideoNode, clips: _SequenceLike[VideoNode], selector: _VSCallback_std_ModifyFrame_selector_1
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self,
+            clip: VideoNode,
+            clips: VideoNode | _SequenceLike[VideoNode],
+            selector: _VSCallback_std_ModifyFrame_selector,
+        ) -> VideoNode: ...
+
+class _Wrapper_VideoNode_bound_ModifyFrame:
+    class Function(_VSFunction):
+        def __init__[PluginT: Plugin](self, function: Callable[Concatenate[PluginT, ...], VideoNode]) -> None: ...
+        @overload
+        def __call__(self, clips: VideoNode, selector: _VSCallback_std_ModifyFrame_selector_0) -> VideoNode: ...
+        @overload
+        def __call__(
+            self, clips: _SequenceLike[VideoNode], selector: _VSCallback_std_ModifyFrame_selector_1
+        ) -> VideoNode: ...
+        @overload
+        def __call__(
+            self, clips: VideoNode | _SequenceLike[VideoNode], selector: _VSCallback_std_ModifyFrame_selector
+        ) -> VideoNode: ...
+
+class FramePtr: ...
+
+# These memoryview-likes don't exist at runtime.
+class _video_view(memoryview):  # type: ignore[misc]
+    def __getitem__(self, index: tuple[int, int]) -> float: ...  # type: ignore[override]
+    def __setitem__(self, index: tuple[int, int], other: float) -> None: ...  # type: ignore[override]
+    @property
+    def shape(self) -> tuple[int, int]: ...
+    @property
+    def strides(self) -> tuple[int, int]: ...
+    @property
+    def ndim(self) -> Literal[2]: ...
+    @property
+    def obj(self) -> FramePtr: ...  # type: ignore[override]
+    def tolist(self) -> list[float]: ...  # type: ignore[override]
+
+class _audio_view(memoryview):  # type: ignore[misc]
+    def __getitem__(self, index: int) -> float: ...  # type: ignore[override]
+    def __setitem__(self, index: int, other: float) -> None: ...  # type: ignore[override]
+    @property
+    def shape(self) -> tuple[int]: ...
+    @property
+    def strides(self) -> tuple[int]: ...
+    @property
+    def ndim(self) -> Literal[1]: ...
+    @property
+    def obj(self) -> FramePtr: ...  # type: ignore[override]
+    def tolist(self) -> list[float]: ...  # type: ignore[override]
+
+class RawFrame:
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __enter__(self) -> Self: ...
+    def __exit__(
+        self, exc: type[BaseException] | None = None, val: BaseException | None = None, tb: TracebackType | None = None
+    ) -> bool | None: ...
+    def __getitem__(self, index: SupportsIndex) -> memoryview: ...
+    def __len__(self) -> int: ...
+    @property
+    def closed(self) -> bool: ...
+    @property
+    def props(self) -> FrameProps: ...
+    @props.setter
+    def props(self, new_props: _SupportsKeysAndGetItem[str, _VSValue]) -> None: ...
+    @property
+    def readonly(self) -> bool: ...
+    def copy(self) -> Self: ...
+    def close(self) -> None: ...
+    def get_write_ptr(self, plane: _IntLike) -> c_void_p: ...
+    def get_read_ptr(self, plane: _IntLike) -> c_void_p: ...
+    def get_stride(self, plane: _IntLike) -> int: ...
+
+# Behave like a Sequence
+class VideoFrame(RawFrame):
+    format: Final[VideoFormat]
+    width: Final[int]
+    height: Final[int]
+
+    def __getitem__(self, index: SupportsIndex) -> _video_view: ...
+    def readchunks(self) -> Iterator[_video_view]: ...
+
+# Behave like a Sequence
+class AudioFrame(RawFrame):
+    sample_type: Final[SampleType]
+    bits_per_sample: Final[int]
+    bytes_per_sample: Final[int]
+    channel_layout: Final[int]
+    num_channels: Final[int]
+
+    def __getitem__(self, index: SupportsIndex) -> _audio_view: ...
+    @property
+    def channels(self) -> ChannelLayout: ...
+
+class RawNode:
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+    def __dir__(self) -> list[str]: ...
+    def __getitem__(self, index: int | slice[int | None, int | None, int | None]) -> Self: ...
+    def __len__(self) -> int: ...
+    def __add__(self, other: Self) -> Self: ...
+    def __mul__(self, other: int) -> Self: ...
+    def __getattr__(self, name: str) -> Plugin: ...
+    @property
+    def node_name(self) -> str: ...
+    @property
+    def timings(self) -> int: ...
+    @timings.setter
+    def timings(self, value: Literal[0]) -> None: ...
+    @property
+    def mode(self) -> FilterMode: ...
+    @property
+    def dependencies(self) -> tuple[Self, ...]: ...
+    @property
+    def _name(self) -> str: ...
+    @property
+    def _plugin_id(self) -> str: ...
+    @property
+    def _plugin_ns(self) -> str: ...
+    @property
+    def _inputs(self) -> dict[str, _VSValue]: ...
+    def get_frame(self, n: _IntLike) -> RawFrame: ...
+    @overload
+    def get_frame_async(self, n: _IntLike) -> Future[RawFrame]: ...
+    @overload
+    def get_frame_async(self, n: _IntLike, cb: Callable[[RawFrame | None, Exception | None], None]) -> None: ...
+    def frames(
+        self, prefetch: int | None = None, backlog: int | None = None, close: bool = False
+    ) -> Iterator[RawFrame]: ...
+    def set_output(self, index: _IntLike = 0) -> None: ...
+    def clear_cache(self) -> None: ...
+    def is_inspectable(self, version: int | None = None) -> bool: ...
+
+type _CurrentFrame = int
+type _TotalFrames = int
+
+# Behave like a Sequence
+class VideoNode(RawNode):
+    format: Final[VideoFormat]
+    width: Final[int]
+    height: Final[int]
+    num_frames: Final[int]
+    fps_num: Final[int]
+    fps_den: Final[int]
+    fps: Final[Fraction]
+    def get_frame(self, n: _IntLike) -> VideoFrame: ...
+    @overload  # type: ignore[override]
+    def get_frame_async(self, n: _IntLike) -> Future[VideoFrame]: ...
+    @overload
+    def get_frame_async(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, n: _IntLike, cb: Callable[[VideoFrame | None, Exception | None], None]
+    ) -> None: ...
+    def frames(
+        self, prefetch: int | None = None, backlog: int | None = None, close: bool = False
+    ) -> Iterator[VideoFrame]: ...
+    def set_output(self, index: _IntLike = 0, alpha: Self | None = None, alt_output: Literal[0, 1, 2] = 0) -> None: ...
+    def output(
+        self,
+        fileobj: IO[bytes],
+        y4m: bool = False,
+        progress_update: Callable[[_CurrentFrame, _TotalFrames], None] | None = None,
+        prefetch: int = 0,
+        backlog: int = -1,
+    ) -> None: ...
+
+# <plugins/bound/VideoNode>
+# <attribute/VideoNode_bound/resize>
+    resize: Final[_resize._VideoNode_bound.Plugin]
+    """VapourSynth Resize"""
+# </attribute/VideoNode_bound/resize>
+# <attribute/VideoNode_bound/std>
+    std: Final[_std._VideoNode_bound.Plugin]
+    """VapourSynth Core Functions"""
+# </attribute/VideoNode_bound/std>
+# </plugins/bound/VideoNode>
+
+# Behave like a Sequence
+class AudioNode(RawNode):
+    sample_type: Final[SampleType]
+    bits_per_sample: Final[int]
+    bytes_per_sample: Final[int]
+    channel_layout: Final[int]
+    num_channels: Final[int]
+    sample_rate: Final[int]
+    num_samples: Final[int]
+    num_frames: Final[int]
+    @property
+    def channels(self) -> ChannelLayout: ...
+    def get_frame(self, n: _IntLike) -> AudioFrame: ...
+    @overload  # type: ignore[override]
+    def get_frame_async(self, n: _IntLike) -> Future[AudioFrame]: ...
+    @overload
+    def get_frame_async(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, n: _IntLike, cb: Callable[[AudioFrame | None, Exception | None], None]
+    ) -> None: ...
+    def frames(
+        self, prefetch: int | None = None, backlog: int | None = None, close: bool = False
+    ) -> Iterator[AudioFrame]: ...
+    def output(
+        self,
+        fileobj: IO[bytes],
+        wav: bool = False,
+        w64: bool = False,
+        progress_update: Callable[[_CurrentFrame, _TotalFrames], None] | None = None,
+        prefetch: int = 0,
+        backlog: int = -1,
+    ) -> None: ...
+
+# <plugins/bound/AudioNode>
+# <attribute/AudioNode_bound/std>
+    std: Final[_std._AudioNode_bound.Plugin]
+    """VapourSynth Core Functions"""
+# </attribute/AudioNode_bound/std>
+# </plugins/bound/AudioNode>
 
 class Core:
-    def __init__(self) -> NoReturn: ...
-
-    @property
-    def num_threads(self) -> int: ...
-
-    @num_threads.setter
-    def num_threads(self, value: int) -> None: ...
-
-    @property
-    def max_cache_size(self) -> int: ...
-
-    @max_cache_size.setter
-    def max_cache_size(self, value: int) -> None: ...
-
-    @property
-    def used_cache_size(self) -> int: ...
-
-    @property
-    def flags(self) -> int: ...
-
-    def plugins(self) -> Iterator[Plugin]: ...
-
-    def query_video_format(
-        self, color_family: ColorFamily, sample_type: SampleType, bits_per_sample: int, subsampling_w: int = 0,
-        subsampling_h: int = 0
-    ) -> VideoFormat: ...
-
-    def get_video_format(self, id: Union[VideoFormat, int, PresetVideoFormat]) -> VideoFormat: ...
-
-    def create_video_frame(self, format: VideoFormat, width: int, height: int) -> VideoFrame: ...
-
-    def log_message(self, message_type: MessageType, message: str) -> None: ...
-
-    def add_log_handler(self, handler_func: Callable[[MessageType, str], None]) -> LogHandle: ...
-
-    def remove_log_handler(self, handle: LogHandle) -> None: ...
-      
-    def clear_cache(self) -> None: ...
-      
-    @property
-    def core_version(self) -> VapourSynthVersion: ...
-
+    timings: Final[CoreTimings]
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __dir__(self) -> list[str]: ...
+    def __getattr__(self, name: str) -> Plugin: ...
     @property
     def api_version(self) -> VapourSynthAPIVersion: ...
-
-    # deprecated
+    @property
+    def core_version(self) -> VapourSynthVersion: ...
+    @property
+    def num_threads(self) -> int: ...
+    @num_threads.setter
+    def num_threads(self, value: _IntLike) -> None: ...
+    @property
+    def max_cache_size(self) -> int: ...
+    @max_cache_size.setter
+    def max_cache_size(self, mb: _IntLike) -> None: ...
+    @property
+    def used_cache_size(self) -> int: ...
+    @property
+    def flags(self) -> int: ...
+    def plugins(self) -> Iterator[Plugin]: ...
+    def query_video_format(
+        self,
+        color_family: _IntLike,
+        sample_type: _IntLike,
+        bits_per_sample: _IntLike,
+        subsampling_w: _IntLike = 0,
+        subsampling_h: _IntLike = 0,
+    ) -> VideoFormat: ...
+    def get_video_format(self, id: _IntLike) -> VideoFormat: ...
+    def create_video_frame(self, format: VideoFormat, width: _IntLike, height: _IntLike) -> VideoFrame: ...
+    def log_message(self, message_type: _IntLike, message: str) -> None: ...
+    def add_log_handler(self, handler_func: Callable[[MessageType, str], None]) -> LogHandle: ...
+    def remove_log_handler(self, handle: LogHandle) -> None: ...
+    def clear_cache(self) -> None: ...
+    @deprecated("core.version() is deprecated, use str(core)!", category=DeprecationWarning)
     def version(self) -> str: ...
-
-    # deprecated
+    @deprecated(
+        "core.version_number() is deprecated, use core.core_version.release_major!", category=DeprecationWarning
+    )
     def version_number(self) -> int: ...
 
-#include <plugins/bound/Core>
+# <plugins/bound/Core>
+# <attribute/Core_bound/resize>
+    resize: Final[_resize._Core_bound.Plugin]
+    """VapourSynth Resize"""
+# </attribute/Core_bound/resize>
+# <attribute/Core_bound/std>
+    std: Final[_std._Core_bound.Plugin]
+    """VapourSynth Core Functions"""
+# </attribute/Core_bound/std>
+# </plugins/bound/Core>
 
-
+# _CoreProxy doesn't inherit from Core but __getattr__ returns the attribute from the actual core
 class _CoreProxy(Core):
+    def __setattr__(self, name: str, value: Any) -> None: ...
     @property
     def core(self) -> Core: ...
 
-
 core: _CoreProxy
+
+# <plugins/implementations>
+# <implementation/resize>
+class _resize:
+    class _Core_bound:
+        class Plugin(_VSPlugin):
+            @_Wrapper.Function
+            def Bicubic(self, clip: VideoNode, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Bilinear(self, clip: VideoNode, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Bob(self, clip: VideoNode, filter: _AnyStr | None = None, tff: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Lanczos(self, clip: VideoNode, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Point(self, clip: VideoNode, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Spline16(self, clip: VideoNode, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Spline36(self, clip: VideoNode, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Spline64(self, clip: VideoNode, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+
+    class _VideoNode_bound:
+        class Plugin(_VSPlugin):
+            @_Wrapper.Function
+            def Bicubic(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Bilinear(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Bob(self, filter: _AnyStr | None = None, tff: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Lanczos(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Point(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Spline16(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Spline36(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Spline64(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, matrix: _IntLike | None = None, matrix_s: _AnyStr | None = None, transfer: _IntLike | None = None, transfer_s: _AnyStr | None = None, primaries: _IntLike | None = None, primaries_s: _AnyStr | None = None, range: _IntLike | None = None, range_s: _AnyStr | None = None, chromaloc: _IntLike | None = None, chromaloc_s: _AnyStr | None = None, matrix_in: _IntLike | None = None, matrix_in_s: _AnyStr | None = None, transfer_in: _IntLike | None = None, transfer_in_s: _AnyStr | None = None, primaries_in: _IntLike | None = None, primaries_in_s: _AnyStr | None = None, range_in: _IntLike | None = None, range_in_s: _AnyStr | None = None, chromaloc_in: _IntLike | None = None, chromaloc_in_s: _AnyStr | None = None, filter_param_a: _FloatLike | None = None, filter_param_b: _FloatLike | None = None, resample_filter_uv: _AnyStr | None = None, filter_param_a_uv: _FloatLike | None = None, filter_param_b_uv: _FloatLike | None = None, dither_type: _AnyStr | None = None, cpu_type: _AnyStr | None = None, prefer_props: _IntLike | None = None, src_left: _FloatLike | None = None, src_top: _FloatLike | None = None, src_width: _FloatLike | None = None, src_height: _FloatLike | None = None, nominal_luminance: _FloatLike | None = None, approximate_gamma: _IntLike | None = None) -> VideoNode: ...
+
+# </implementation/resize>
+
+# <implementation/std>
+class _std:
+    class _Core_bound:
+        class Plugin(_VSPlugin):
+            @_Wrapper.Function
+            def AddBorders(self, clip: VideoNode, left: _IntLike | None = None, right: _IntLike | None = None, top: _IntLike | None = None, bottom: _IntLike | None = None, color: _FloatLike | _SequenceLike[_FloatLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def AssumeFPS(self, clip: VideoNode, src: VideoNode | None = None, fpsnum: _IntLike | None = None, fpsden: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def AssumeSampleRate(self, clip: AudioNode, src: AudioNode | None = None, samplerate: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioGain(self, clip: AudioNode, gain: _FloatLike | _SequenceLike[_FloatLike] | None = None, overflow_error: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioLoop(self, clip: AudioNode, times: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioMix(self, clips: AudioNode | _SequenceLike[AudioNode], matrix: _FloatLike | _SequenceLike[_FloatLike], channels_out: _IntLike | _SequenceLike[_IntLike], overflow_error: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioReverse(self, clip: AudioNode) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioSplice(self, clips: AudioNode | _SequenceLike[AudioNode]) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioTrim(self, clip: AudioNode, first: _IntLike | None = None, last: _IntLike | None = None, length: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AverageFrames(self, clips: VideoNode | _SequenceLike[VideoNode], weights: _FloatLike | _SequenceLike[_FloatLike], scale: _FloatLike | None = None, scenechange: _IntLike | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Binarize(self, clip: VideoNode, threshold: _FloatLike | _SequenceLike[_FloatLike] | None = None, v0: _FloatLike | _SequenceLike[_FloatLike] | None = None, v1: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def BinarizeMask(self, clip: VideoNode, threshold: _FloatLike | _SequenceLike[_FloatLike] | None = None, v0: _FloatLike | _SequenceLike[_FloatLike] | None = None, v1: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def BlankAudio(self, clip: AudioNode | None = None, channels: _IntLike | _SequenceLike[_IntLike] | None = None, bits: _IntLike | None = None, sampletype: _IntLike | None = None, samplerate: _IntLike | None = None, length: _IntLike | None = None, keep: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def BlankClip(self, clip: VideoNode | None = None, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, length: _IntLike | None = None, fpsnum: _IntLike | None = None, fpsden: _IntLike | None = None, color: _FloatLike | _SequenceLike[_FloatLike] | None = None, keep: _IntLike | None = None, varsize: _IntLike | None = None, varformat: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def BoxBlur(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, hradius: _IntLike | None = None, hpasses: _IntLike | None = None, vradius: _IntLike | None = None, vpasses: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Cache(self, clip: VideoNode, size: _IntLike | None = None, fixed: _IntLike | None = None, make_linear: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def ClipToProp(self, clip: VideoNode, mclip: VideoNode, prop: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Convolution(self, clip: VideoNode, matrix: _FloatLike | _SequenceLike[_FloatLike], bias: _FloatLike | None = None, divisor: _FloatLike | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None, saturate: _IntLike | None = None, mode: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def CopyFrameProps(self, clip: VideoNode, prop_src: VideoNode, props: _AnyStr | _SequenceLike[_AnyStr] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Crop(self, clip: VideoNode, left: _IntLike | None = None, right: _IntLike | None = None, top: _IntLike | None = None, bottom: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def CropAbs(self, clip: VideoNode, width: _IntLike, height: _IntLike, left: _IntLike | None = None, top: _IntLike | None = None, x: _IntLike | None = None, y: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def CropRel(self, clip: VideoNode, left: _IntLike | None = None, right: _IntLike | None = None, top: _IntLike | None = None, bottom: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Deflate(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def DeleteFrames(self, clip: VideoNode, frames: _IntLike | _SequenceLike[_IntLike]) -> VideoNode: ...
+            @_Wrapper.Function
+            def DoubleWeave(self, clip: VideoNode, tff: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def DuplicateFrames(self, clip: VideoNode, frames: _IntLike | _SequenceLike[_IntLike]) -> VideoNode: ...
+            @_Wrapper.Function
+            def Expr(self, clips: VideoNode | _SequenceLike[VideoNode], expr: _AnyStr | _SequenceLike[_AnyStr], format: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def FlipHorizontal(self, clip: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def FlipVertical(self, clip: VideoNode) -> VideoNode: ...
+            @_Wrapper_Core_bound_FrameEval.Function
+            def FrameEval(self, clip: VideoNode, eval: _VSCallback_std_FrameEval_eval, prop_src: VideoNode | _SequenceLike[VideoNode] | None = None, clip_src: VideoNode | _SequenceLike[VideoNode] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def FreezeFrames(self, clip: VideoNode, first: _IntLike | _SequenceLike[_IntLike] | None = None, last: _IntLike | _SequenceLike[_IntLike] | None = None, replacement: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Inflate(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Interleave(self, clips: VideoNode | _SequenceLike[VideoNode], extend: _IntLike | None = None, mismatch: _IntLike | None = None, modify_duration: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Invert(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def InvertMask(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Levels(self, clip: VideoNode, min_in: _FloatLike | _SequenceLike[_FloatLike] | None = None, max_in: _FloatLike | _SequenceLike[_FloatLike] | None = None, gamma: _FloatLike | _SequenceLike[_FloatLike] | None = None, min_out: _FloatLike | _SequenceLike[_FloatLike] | None = None, max_out: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Limiter(self, clip: VideoNode, min: _FloatLike | _SequenceLike[_FloatLike] | None = None, max: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def LoadAllPlugins(self, path: _AnyStr) -> None: ...
+            @_Wrapper.Function
+            def LoadPlugin(self, path: _AnyStr, altsearchpath: _IntLike | None = None, forcens: _AnyStr | None = None, forceid: _AnyStr | None = None) -> None: ...
+            @_Wrapper.Function
+            def Loop(self, clip: VideoNode, times: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Lut(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, lut: _IntLike | _SequenceLike[_IntLike] | None = None, lutf: _FloatLike | _SequenceLike[_FloatLike] | None = None, function: _VSCallback_std_Lut_function | None = None, bits: _IntLike | None = None, floatout: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Lut2(self, clipa: VideoNode, clipb: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, lut: _IntLike | _SequenceLike[_IntLike] | None = None, lutf: _FloatLike | _SequenceLike[_FloatLike] | None = None, function: _VSCallback_std_Lut2_function | None = None, bits: _IntLike | None = None, floatout: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MakeDiff(self, clipa: VideoNode, clipb: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MakeFullDiff(self, clipa: VideoNode, clipb: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def MaskedMerge(self, clipa: VideoNode, clipb: VideoNode, mask: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, first_plane: _IntLike | None = None, premultiplied: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Maximum(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None, coordinates: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Median(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Merge(self, clipa: VideoNode, clipb: VideoNode, weight: _FloatLike | _SequenceLike[_FloatLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MergeDiff(self, clipa: VideoNode, clipb: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MergeFullDiff(self, clipa: VideoNode, clipb: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def Minimum(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None, coordinates: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper_Core_bound_ModifyFrame.Function
+            def ModifyFrame(self, clip: VideoNode, clips: VideoNode | _SequenceLike[VideoNode], selector: _VSCallback_std_ModifyFrame_selector) -> VideoNode: ...
+            @_Wrapper.Function
+            def PEMVerifier(self, clip: VideoNode, upper: _FloatLike | _SequenceLike[_FloatLike] | None = None, lower: _FloatLike | _SequenceLike[_FloatLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def PlaneStats(self, clipa: VideoNode, clipb: VideoNode | None = None, plane: _IntLike | None = None, prop: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def PreMultiply(self, clip: VideoNode, alpha: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def Prewitt(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, scale: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def PropToClip(self, clip: VideoNode, prop: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def RemoveFrameProps(self, clip: VideoNode, props: _AnyStr | _SequenceLike[_AnyStr] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Reverse(self, clip: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def SelectEvery(self, clip: VideoNode, cycle: _IntLike, offsets: _IntLike | _SequenceLike[_IntLike], modify_duration: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SeparateFields(self, clip: VideoNode, tff: _IntLike | None = None, modify_duration: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetAudioCache(self, clip: AudioNode, mode: _IntLike | None = None, fixedsize: _IntLike | None = None, maxsize: _IntLike | None = None, maxhistory: _IntLike | None = None) -> None: ...
+            @_Wrapper.Function
+            def SetFieldBased(self, clip: VideoNode, value: _IntLike) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetFrameProp(self, clip: VideoNode, prop: _AnyStr, intval: _IntLike | _SequenceLike[_IntLike] | None = None, floatval: _FloatLike | _SequenceLike[_FloatLike] | None = None, data: _AnyStr | _SequenceLike[_AnyStr] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetFrameProps(self, clip: VideoNode, **kwargs: Any) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetMaxCPU(self, cpu: _AnyStr) -> _AnyStr: ...
+            @_Wrapper.Function
+            def SetVideoCache(self, clip: VideoNode, mode: _IntLike | None = None, fixedsize: _IntLike | None = None, maxsize: _IntLike | None = None, maxhistory: _IntLike | None = None) -> None: ...
+            @_Wrapper.Function
+            def ShuffleChannels(self, clips: AudioNode | _SequenceLike[AudioNode], channels_in: _IntLike | _SequenceLike[_IntLike], channels_out: _IntLike | _SequenceLike[_IntLike]) -> AudioNode: ...
+            @_Wrapper.Function
+            def ShufflePlanes(self, clips: VideoNode | _SequenceLike[VideoNode], planes: _IntLike | _SequenceLike[_IntLike], colorfamily: _IntLike, prop_src: VideoNode | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Sobel(self, clip: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, scale: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Splice(self, clips: VideoNode | _SequenceLike[VideoNode], mismatch: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SplitChannels(self, clip: AudioNode) -> AudioNode | list[AudioNode]: ...
+            @_Wrapper.Function
+            def SplitPlanes(self, clip: VideoNode) -> VideoNode | list[VideoNode]: ...
+            @_Wrapper.Function
+            def StackHorizontal(self, clips: VideoNode | _SequenceLike[VideoNode]) -> VideoNode: ...
+            @_Wrapper.Function
+            def StackVertical(self, clips: VideoNode | _SequenceLike[VideoNode]) -> VideoNode: ...
+            @_Wrapper.Function
+            def TestAudio(self, channels: _IntLike | _SequenceLike[_IntLike] | None = None, bits: _IntLike | None = None, isfloat: _IntLike | None = None, samplerate: _IntLike | None = None, length: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def Transpose(self, clip: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def Trim(self, clip: VideoNode, first: _IntLike | None = None, last: _IntLike | None = None, length: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Turn180(self, clip: VideoNode) -> VideoNode: ...
+
+    class _VideoNode_bound:
+        class Plugin(_VSPlugin):
+            @_Wrapper.Function
+            def AddBorders(self, left: _IntLike | None = None, right: _IntLike | None = None, top: _IntLike | None = None, bottom: _IntLike | None = None, color: _FloatLike | _SequenceLike[_FloatLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def AssumeFPS(self, src: VideoNode | None = None, fpsnum: _IntLike | None = None, fpsden: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def AverageFrames(self, weights: _FloatLike | _SequenceLike[_FloatLike], scale: _FloatLike | None = None, scenechange: _IntLike | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Binarize(self, threshold: _FloatLike | _SequenceLike[_FloatLike] | None = None, v0: _FloatLike | _SequenceLike[_FloatLike] | None = None, v1: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def BinarizeMask(self, threshold: _FloatLike | _SequenceLike[_FloatLike] | None = None, v0: _FloatLike | _SequenceLike[_FloatLike] | None = None, v1: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def BlankClip(self, width: _IntLike | None = None, height: _IntLike | None = None, format: _IntLike | None = None, length: _IntLike | None = None, fpsnum: _IntLike | None = None, fpsden: _IntLike | None = None, color: _FloatLike | _SequenceLike[_FloatLike] | None = None, keep: _IntLike | None = None, varsize: _IntLike | None = None, varformat: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def BoxBlur(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, hradius: _IntLike | None = None, hpasses: _IntLike | None = None, vradius: _IntLike | None = None, vpasses: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Cache(self, size: _IntLike | None = None, fixed: _IntLike | None = None, make_linear: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def ClipToProp(self, mclip: VideoNode, prop: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Convolution(self, matrix: _FloatLike | _SequenceLike[_FloatLike], bias: _FloatLike | None = None, divisor: _FloatLike | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None, saturate: _IntLike | None = None, mode: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def CopyFrameProps(self, prop_src: VideoNode, props: _AnyStr | _SequenceLike[_AnyStr] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Crop(self, left: _IntLike | None = None, right: _IntLike | None = None, top: _IntLike | None = None, bottom: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def CropAbs(self, width: _IntLike, height: _IntLike, left: _IntLike | None = None, top: _IntLike | None = None, x: _IntLike | None = None, y: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def CropRel(self, left: _IntLike | None = None, right: _IntLike | None = None, top: _IntLike | None = None, bottom: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Deflate(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def DeleteFrames(self, frames: _IntLike | _SequenceLike[_IntLike]) -> VideoNode: ...
+            @_Wrapper.Function
+            def DoubleWeave(self, tff: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def DuplicateFrames(self, frames: _IntLike | _SequenceLike[_IntLike]) -> VideoNode: ...
+            @_Wrapper.Function
+            def Expr(self, expr: _AnyStr | _SequenceLike[_AnyStr], format: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def FlipHorizontal(self) -> VideoNode: ...
+            @_Wrapper.Function
+            def FlipVertical(self) -> VideoNode: ...
+            @_Wrapper_VideoNode_bound_FrameEval.Function
+            def FrameEval(self, eval: _VSCallback_std_FrameEval_eval, prop_src: VideoNode | _SequenceLike[VideoNode] | None = None, clip_src: VideoNode | _SequenceLike[VideoNode] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def FreezeFrames(self, first: _IntLike | _SequenceLike[_IntLike] | None = None, last: _IntLike | _SequenceLike[_IntLike] | None = None, replacement: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Inflate(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Interleave(self, extend: _IntLike | None = None, mismatch: _IntLike | None = None, modify_duration: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Invert(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def InvertMask(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Levels(self, min_in: _FloatLike | _SequenceLike[_FloatLike] | None = None, max_in: _FloatLike | _SequenceLike[_FloatLike] | None = None, gamma: _FloatLike | _SequenceLike[_FloatLike] | None = None, min_out: _FloatLike | _SequenceLike[_FloatLike] | None = None, max_out: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Limiter(self, min: _FloatLike | _SequenceLike[_FloatLike] | None = None, max: _FloatLike | _SequenceLike[_FloatLike] | None = None, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Loop(self, times: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Lut(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, lut: _IntLike | _SequenceLike[_IntLike] | None = None, lutf: _FloatLike | _SequenceLike[_FloatLike] | None = None, function: _VSCallback_std_Lut_function | None = None, bits: _IntLike | None = None, floatout: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Lut2(self, clipb: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, lut: _IntLike | _SequenceLike[_IntLike] | None = None, lutf: _FloatLike | _SequenceLike[_FloatLike] | None = None, function: _VSCallback_std_Lut2_function | None = None, bits: _IntLike | None = None, floatout: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MakeDiff(self, clipb: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MakeFullDiff(self, clipb: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def MaskedMerge(self, clipb: VideoNode, mask: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None, first_plane: _IntLike | None = None, premultiplied: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Maximum(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None, coordinates: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Median(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Merge(self, clipb: VideoNode, weight: _FloatLike | _SequenceLike[_FloatLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MergeDiff(self, clipb: VideoNode, planes: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def MergeFullDiff(self, clipb: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def Minimum(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, threshold: _FloatLike | None = None, coordinates: _IntLike | _SequenceLike[_IntLike] | None = None) -> VideoNode: ...
+            @_Wrapper_VideoNode_bound_ModifyFrame.Function
+            def ModifyFrame(self, clips: VideoNode | _SequenceLike[VideoNode], selector: _VSCallback_std_ModifyFrame_selector) -> VideoNode: ...
+            @_Wrapper.Function
+            def PEMVerifier(self, upper: _FloatLike | _SequenceLike[_FloatLike] | None = None, lower: _FloatLike | _SequenceLike[_FloatLike] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def PlaneStats(self, clipb: VideoNode | None = None, plane: _IntLike | None = None, prop: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def PreMultiply(self, alpha: VideoNode) -> VideoNode: ...
+            @_Wrapper.Function
+            def Prewitt(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, scale: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def PropToClip(self, prop: _AnyStr | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def RemoveFrameProps(self, props: _AnyStr | _SequenceLike[_AnyStr] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Reverse(self) -> VideoNode: ...
+            @_Wrapper.Function
+            def SelectEvery(self, cycle: _IntLike, offsets: _IntLike | _SequenceLike[_IntLike], modify_duration: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SeparateFields(self, tff: _IntLike | None = None, modify_duration: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetFieldBased(self, value: _IntLike) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetFrameProp(self, prop: _AnyStr, intval: _IntLike | _SequenceLike[_IntLike] | None = None, floatval: _FloatLike | _SequenceLike[_FloatLike] | None = None, data: _AnyStr | _SequenceLike[_AnyStr] | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetFrameProps(self, **kwargs: Any) -> VideoNode: ...
+            @_Wrapper.Function
+            def SetVideoCache(self, mode: _IntLike | None = None, fixedsize: _IntLike | None = None, maxsize: _IntLike | None = None, maxhistory: _IntLike | None = None) -> None: ...
+            @_Wrapper.Function
+            def ShufflePlanes(self, planes: _IntLike | _SequenceLike[_IntLike], colorfamily: _IntLike, prop_src: VideoNode | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Sobel(self, planes: _IntLike | _SequenceLike[_IntLike] | None = None, scale: _FloatLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Splice(self, mismatch: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def SplitPlanes(self) -> VideoNode | list[VideoNode]: ...
+            @_Wrapper.Function
+            def StackHorizontal(self) -> VideoNode: ...
+            @_Wrapper.Function
+            def StackVertical(self) -> VideoNode: ...
+            @_Wrapper.Function
+            def Transpose(self) -> VideoNode: ...
+            @_Wrapper.Function
+            def Trim(self, first: _IntLike | None = None, last: _IntLike | None = None, length: _IntLike | None = None) -> VideoNode: ...
+            @_Wrapper.Function
+            def Turn180(self) -> VideoNode: ...
+
+    class _AudioNode_bound:
+        class Plugin(_VSPlugin):
+            @_Wrapper.Function
+            def AssumeSampleRate(self, src: AudioNode | None = None, samplerate: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioGain(self, gain: _FloatLike | _SequenceLike[_FloatLike] | None = None, overflow_error: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioLoop(self, times: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioMix(self, matrix: _FloatLike | _SequenceLike[_FloatLike], channels_out: _IntLike | _SequenceLike[_IntLike], overflow_error: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioReverse(self) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioSplice(self) -> AudioNode: ...
+            @_Wrapper.Function
+            def AudioTrim(self, first: _IntLike | None = None, last: _IntLike | None = None, length: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def BlankAudio(self, channels: _IntLike | _SequenceLike[_IntLike] | None = None, bits: _IntLike | None = None, sampletype: _IntLike | None = None, samplerate: _IntLike | None = None, length: _IntLike | None = None, keep: _IntLike | None = None) -> AudioNode: ...
+            @_Wrapper.Function
+            def SetAudioCache(self, mode: _IntLike | None = None, fixedsize: _IntLike | None = None, maxsize: _IntLike | None = None, maxhistory: _IntLike | None = None) -> None: ...
+            @_Wrapper.Function
+            def ShuffleChannels(self, channels_in: _IntLike | _SequenceLike[_IntLike], channels_out: _IntLike | _SequenceLike[_IntLike]) -> AudioNode: ...
+            @_Wrapper.Function
+            def SplitChannels(self) -> AudioNode | list[AudioNode]: ...
+
+# </implementation/std>
+
+# </plugins/implementations>
+
+class VideoOutputTuple(NamedTuple):
+    clip: VideoNode
+    alpha: VideoNode | None
+    alt_output: Literal[0, 1, 2]
+
+def clear_output(index: _IntLike = 0) -> None: ...
+def clear_outputs() -> None: ...
+def get_outputs() -> MappingProxyType[int, VideoOutputTuple | AudioNode]: ...
+def get_output(index: _IntLike = 0) -> VideoOutputTuple | AudioNode: ...
+
+
+class PythonVSScriptLoggingBridge(Handler):
+    def __init__(self, parent: StreamHandler[TextIO], level: int | str = ...) -> None: ...
+    def emit(self, record: LogRecord) -> None: ...
+
+@final
+class VSScriptEnvironmentPolicy:
+    def on_policy_registered(self, policy_api: EnvironmentPolicyAPI) -> None: ...
+    def on_policy_cleared(self) -> None: ...
+    def get_current_environment(self) -> EnvironmentData | None: ...
+    def set_environment(self, environment: EnvironmentData | None) -> EnvironmentData | None: ...
+    def is_alive(self, environment: EnvironmentData) -> bool: ...
