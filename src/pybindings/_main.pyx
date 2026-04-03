@@ -2905,7 +2905,7 @@ class PythonVSScriptLoggingBridge(logging.Handler):
     def emit(self, record):
         env = _env_current()
         if env is None:
-            self.parent.handle(record)
+            self._parent.handle(record)
             return
         core = vsscript_get_core_internal(env)
 
