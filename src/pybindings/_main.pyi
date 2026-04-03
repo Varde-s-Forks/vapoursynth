@@ -19,6 +19,7 @@ from typing import TextIO
 from ._constants import *
 
 __all__ = [
+    "LOG_LEVEL_MAP",
     "clear_output",
     "clear_outputs",
     "core",
@@ -152,9 +153,9 @@ type _VSCallback_std_ModifyFrame_selector = (  # noqa: PYI047
 class _VSCallback_resize2_Custom_custom_kernel(Protocol):
     def __call__(self, *, x: float) -> _FloatLike: ...
 
+LOG_LEVEL_MAP: MappingProxyType[MessageType, int]
+
 class LogHandle: ...
-
-
 
 class Error(Exception):
     value: Any

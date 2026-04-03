@@ -72,6 +72,16 @@ from ._constants import (
 from ._signatures import _construct_repr, construct_signature
 
 
+# Log level mapping from VapourSynth to Python logging
+cdef dict _LOG_LEVEL_MAP = {
+    MessageType.MESSAGE_TYPE_DEBUG: logging.DEBUG,
+    MessageType.MESSAGE_TYPE_INFORMATION: logging.INFO,
+    MessageType.MESSAGE_TYPE_WARNING: logging.WARNING,
+    MessageType.MESSAGE_TYPE_CRITICAL: logging.ERROR,
+    MessageType.MESSAGE_TYPE_FATAL: logging.CRITICAL
+}
+LOG_LEVEL_MAP = MappingProxyType(_LOG_LEVEL_MAP)
+
 
 @cython.final
 cdef class EnvironmentData:
@@ -113,14 +123,7 @@ cdef class StandaloneEnvironmentPolicy(EnvironmentPolicy):
         raise RuntimeError("Cannot directly instantiate this class.")
 
     def _on_log_message(self, level, msg):
-        levelmap = {
-            MessageType.MESSAGE_TYPE_DEBUG: logging.DEBUG,
-            MessageType.MESSAGE_TYPE_INFORMATION: logging.INFO,
-            MessageType.MESSAGE_TYPE_WARNING: logging.WARN,
-            MessageType.MESSAGE_TYPE_CRITICAL: logging.ERROR,
-            MessageType.MESSAGE_TYPE_FATAL: logging.FATAL
-        }
-        self._logger.log(levelmap[level], msg)
+        self._logger.log(_LOG_LEVEL_MAP[level], msg)
 
     def on_policy_registered(self, EnvironmentPolicyAPI special_api):
         self._api = special_api
