@@ -21,7 +21,6 @@
 cimport cython
 from cpython.buffer cimport PyBUF_SIMPLE, PyBuffer_FillInfo, PyBuffer_Release
 from cpython.memoryview cimport PyMemoryView_FromObject
-from cpython.number cimport PyIndex_Check, PyNumber_Index
 from cpython.ref cimport Py_DECREF, Py_INCREF
 from libc.stdint cimport (
     int16_t,
@@ -1231,7 +1230,7 @@ cdef class RawFrame(object):
             self.funcs.freeFrame(self.constf)
         self.constf = NULL
 
-    def __getitem__(self, index):
+    def __getitem__(self, int index):
         raise NotImplementedError
 
     def __len__(self):
@@ -1315,13 +1314,8 @@ cdef class VideoFrame(RawFrame):
                     _video.filllineinfo(&view.base, frame, plane, row, &self.flags, lib)
                     yield PyMemoryView_FromObject(view)
 
-    def __getitem__(self, index):
+    def __getitem__(self, int index):
         self._ensure_open()
-        if PyIndex_Check(index):
-            index = PyNumber_Index(index)
-        else:
-            raise TypeError("frame indices must be integers, not %s"
-                            % (type(index).__name__,))
 
         lib = self.funcs
         frame = <VSFrame*> self.constf
@@ -1511,30 +1505,25 @@ cdef class AudioFrame(RawFrame):
     def channels(self):
         return ChannelLayout(self.channel_layout)
 
-    def __getitem__(self, index):
+    def __getitem__(self, int index) -> memoryview:
         self._ensure_open()
-        if PyIndex_Check(index):
-            index = PyNumber_Index(index)
 
-            lib = self.funcs
-            frame = <VSFrame*> self.constf
-            format = lib.getAudioFrameFormat(frame)
+        lib = self.funcs
+        frame = <VSFrame*> self.constf
+        format = lib.getAudioFrameFormat(frame)
 
-            if index < 0:
-                index += format.numChannels
-            if not 0 <= index < format.numChannels:
-                raise IndexError("index out of range")
+        if index < 0:
+            index += format.numChannels
+        if not 0 <= index < format.numChannels:
+            raise IndexError("index out of range")
 
-            data = _audio.allocinfo(format)
-            data.base.obj = createFramePtr(self.funcs.addFrameRef(self.constf), self.funcs)
-            data.base.readonly = not self.flags & 1
+        data = _audio.allocinfo(format)
+        data.base.obj = createFramePtr(self.funcs.addFrameRef(self.constf), self.funcs)
+        data.base.readonly = not self.flags & 1
 
-            _audio.fillinfo(&data.base, frame, index, &self.flags, lib)
+        _audio.fillinfo(&data.base, frame, index, &self.flags, lib)
 
-            return PyMemoryView_FromObject(data)
-        else:
-            raise TypeError("frame indices must be integers, not %s"
-                            % (type(index).__name__,))
+        return PyMemoryView_FromObject(data)
 
     def __len__(self):
         self._ensure_open()
@@ -1938,9 +1927,9 @@ cdef class VideoNode(RawNode):
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
-    def __getattr__(self, name):
+    def __getattr__(self, str name) -> Plugin:
         try:
-            obj = self.core.__getattr__(name)
+            obj = getattr(self.core, name)
             if isinstance(obj, Plugin):
                 (<Plugin>obj).injected_arg = self
             return obj
@@ -1953,7 +1942,7 @@ cdef class VideoNode(RawNode):
         if (self.num_frames > 0) and (n >= self.num_frames):
             raise ValueError('Requesting frame number is beyond the last frame')
 
-    def get_frame(self, int n):
+    def get_frame(self, int n) -> VideoFrame:
         cdef char errorMsg[4096]
         cdef char *ep = errorMsg
         cdef const VSFrame *f
@@ -2568,7 +2557,7 @@ cdef class Core(object):
     def flags(self):
         return self.creationFlags
 
-    def __getattr__(self, name):
+    def __getattr__(self, str name) -> Plugin:
         cdef VSPlugin *plugin
         tname = name.encode('utf-8')
         cdef const char *cname = tname
@@ -2805,7 +2794,7 @@ cdef class Plugin(object):
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
-    def __getattr__(self, name):
+    def __getattr__(self, str name) -> Function:
         tname = name.encode('utf-8')
         cdef const char *cname = tname
         cdef VSPluginFunction *func = self.funcs.getPluginFunctionByName(cname, self.plugin)
