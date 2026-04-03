@@ -1851,21 +1851,21 @@ cdef class RawNode(object):
         if not self._inspectable():
             raise Error("This node is not inspectable.")
 
-        return self.funcs.getNodeCreationFunctionName(self.node, 0).decode("utf-8")
+        return (<bytes>self.funcs.getNodeCreationFunctionName(self.node, 0)).decode("utf-8")
 
     @property
     def _plugin_id(self):
         if not self._inspectable():
             raise Error("This node is not inspectable.")
 
-        return self.funcs.getNodeCreationPluginID(self.node, 0).decode("utf-8")
+        return (<bytes>self.funcs.getNodeCreationPluginID(self.node, 0)).decode("utf-8")
 
     @property
     def _plugin_ns(self):
         if not self._inspectable():
             raise Error("This node is not inspectable.")
 
-        return self.funcs.getNodeCreationPluginNS(self.node, 0).decode("utf-8")
+        return (<bytes>self.funcs.getNodeCreationPluginNS(self.node, 0)).decode("utf-8")
 
     @property
     def _inputs(self):
@@ -1943,7 +1943,7 @@ cdef class VideoNode(RawNode):
             raise ValueError('Requesting frame number is beyond the last frame')
 
     def get_frame(self, int n) -> VideoFrame:
-        cdef char errorMsg[4096]
+        cdef char[4096] errorMsg
         cdef char *ep = errorMsg
         cdef const VSFrame *f
         self.ensure_valid_frame_number(n)
@@ -2040,7 +2040,7 @@ cdef class VideoNode(RawNode):
     def __add__(self, other):
         if not isinstance(self, VideoNode) or not isinstance(other, VideoNode):
             return NotImplemented
-        return (<VideoNode>self).core.std.Splice(clips=[self, other])
+        return self.core.std.Splice(clips=[self, other])
 
     def __mul__(self, other):
         if isinstance(self, VideoNode):
