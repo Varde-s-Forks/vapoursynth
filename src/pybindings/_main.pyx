@@ -22,16 +22,7 @@ cimport cython
 from cpython.buffer cimport PyBUF_SIMPLE, PyBuffer_FillInfo, PyBuffer_Release
 from cpython.memoryview cimport PyMemoryView_FromObject
 from cpython.ref cimport Py_DECREF, Py_INCREF
-from libc.stdint cimport (
-    int16_t,
-    int32_t,
-    int64_t,
-    intptr_t,
-    uint8_t,
-    uint16_t,
-    uint32_t,
-    uint64_t,
-)
+from libc.stdint cimport int64_t, uint8_t, uint32_t
 from libc.stdlib cimport free, malloc, realloc
 from vapoursynth4 cimport *
 from vsconstants4 cimport *
@@ -60,8 +51,7 @@ import traceback
 import typing
 import warnings
 import weakref
-
-from collections.abc import ItemsView, Iterable, KeysView, MutableMapping, ValuesView
+from collections.abc import ItemsView, KeysView, MutableMapping, ValuesView
 from concurrent.futures import Future
 from fractions import Fraction
 from types import MappingProxyType
@@ -78,23 +68,12 @@ from ._constants import (
     __api_version__,
     __version__,
 )
-from ._signatures import construct_signature, _construct_repr
+from ._signatures import _construct_repr, construct_signature
+
 
 
 @cython.final
-cdef class EnvironmentData(object):
-    cdef bint alive
-    cdef Core core
-    cdef object on_destroy
-    cdef dict outputs
-
-    cdef int coreCreationFlags
-    cdef VSLogHandle* log
-
-    cdef object env_locals
-
-    cdef object __weakref__
-
+cdef class EnvironmentData:
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -110,9 +89,8 @@ cdef class EnvironmentData(object):
         _unset_logger(self)
 
 
-class EnvironmentPolicy(object):
-
-    def on_policy_registered(self, special_api):
+cdef class EnvironmentPolicy:
+    def on_policy_registered(self, special_api) -> None:
         pass
 
     def on_policy_cleared(self):
@@ -128,16 +106,8 @@ class EnvironmentPolicy(object):
         cdef EnvironmentData env = <EnvironmentData>environment
         return env.alive
 
-
 @cython.final
 cdef class StandaloneEnvironmentPolicy:
-    cdef EnvironmentData _environment
-    cdef object _api
-    cdef object _logger
-    cdef int _flags
-
-    cdef object __weakref__
-
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -151,7 +121,7 @@ cdef class StandaloneEnvironmentPolicy:
         }
         self._logger.log(levelmap[level], msg)
 
-    def on_policy_registered(self, api):
+    def on_policy_registered(self, EnvironmentPolicyAPI api):
         self._api = api
         self._logger = logging.getLogger("vapoursynth")
         self._environment = api.create_environment(self._flags)
@@ -192,27 +162,17 @@ cdef void _unset_logger(EnvironmentData env):
     env.log = NULL
 
 
-cdef void __stdcall _logCb(int msgType, const char *msg, void *userData) noexcept nogil:
+cdef void _logCb(int msgType, const char *msg, void *userData) noexcept nogil:
     with gil:
         message = msg.decode("utf-8")
         (<object>userData)(msgType, message)
 
-cdef void __stdcall _logFree(void* userData) noexcept nogil:
+cdef void _logFree(void* userData) noexcept nogil:
     with gil:
         Py_DECREF(<object>userData)
 
 @cython.final
 cdef class EnvironmentPolicyAPI:
-    # This must be a weak-ref to prevent a cyclic dependency that happens if the API
-    # is stored within an EnvironmentPolicy-instance.
-    cdef object _target_policy
-
-    cdef object _lock
-    cdef object _known_environments
-    # Sadly, weakref has no WeakSet.
-    # So we use a counter to fake a WeakSet.
-    cdef int _known_environments_counter
-
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -243,7 +203,7 @@ cdef class EnvironmentPolicyAPI:
 
         return env
 
-    def set_logger(self, env, logger):
+    def set_logger(self, EnvironmentData env, object logger):
         Py_INCREF(logger)
         _set_logger(env, _logCb, _logFree, <void *>logger)
 
@@ -325,7 +285,7 @@ def _try_enable_introspection(version=None):
 
 
 ## DO NOT EXPOSE THIS FUNCTION TO PYTHON-LAND!
-cdef get_policy():
+cdef EnvironmentPolicy get_policy():
     global _policy
     cdef StandaloneEnvironmentPolicy standalone_policy
 
@@ -339,7 +299,7 @@ cdef get_policy():
 def has_policy():
     return _policy is not None
 
-cdef clear_policy(delay=False):
+cdef clear_policy(bint delay=False):
     global _policy
     old_policy = _policy
 
@@ -378,10 +338,7 @@ def unregister_on_destroy(callback):
 
 
 @cython.final
-cdef class _FastManager(object):
-    cdef EnvironmentData target
-    cdef EnvironmentData previous
-
+cdef class _FastManager:
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -400,9 +357,7 @@ cdef class _FastManager(object):
         self.previous = None
 
 
-cdef class Environment(object):
-    cdef readonly object env
-
+cdef class Environment:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -463,8 +418,6 @@ cdef class Environment(object):
 
 
 cdef class Local:
-    cdef object __weakref__
-
     def __getattr__(self, key):
         cdef EnvironmentData env = get_policy().get_current_environment()
         values = env.env_locals.setdefault(self, {})
@@ -518,7 +471,7 @@ class Error(Exception):
     def __repr__(self):
         return repr(self.value)
 
-cdef _get_output_dict(funcname="this function"):
+cdef _get_output_dict(str funcname):
     cdef EnvironmentData env = _env_current()
     if env is None:
         raise Error('Internal environment id not set. %s called from a filter callback?'%funcname)
@@ -542,11 +495,7 @@ def get_outputs():
 def get_output(int index = 0):
     return _get_output_dict("get_output")[index]
 
-cdef class FuncData(object):
-    cdef object func
-    cdef VSCore *core
-    cdef EnvironmentData env
-
+cdef class FuncData:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -560,10 +509,7 @@ cdef FuncData createFuncData(object func, VSCore *core, EnvironmentData env):
     instance.env = env
     return instance
 
-cdef class Func(object):
-    cdef const VSAPI *funcs
-    cdef VSFunction *ref
-
+cdef class Func:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -610,14 +556,7 @@ cdef Func createFuncRef(VSFunction *ref, const VSAPI *funcs):
     return instance
 
 
-cdef class CallbackData(object):
-    cdef const VSAPI *funcs
-    cdef object callback
-
-    cdef RawNode node
-
-    cdef EnvironmentData env
-
+cdef class CallbackData:
     def __init__(self, object node, EnvironmentData env, object callback):
         # Keeps the node alive during the call.
         self.node = node
@@ -632,10 +571,7 @@ cdef createCallbackData(const VSAPI* funcs, RawNode node, object cb):
     return cbd
 
 
-cdef class FramePtr(object):
-    cdef const VSFrame *f
-    cdef const VSAPI *funcs
-
+cdef class FramePtr:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -650,7 +586,7 @@ cdef FramePtr createFramePtr(const VSFrame *f, const VSAPI *funcs):
     return instance
 
 
-cdef void __stdcall frameDoneCallback(void *data, const VSFrame *f, int n, VSNode *node, const char *errormsg) noexcept nogil:
+cdef void frameDoneCallback(void *data, const VSFrame *f, int n, VSNode *node, const char *errormsg) noexcept nogil:
     with gil:
         result = error = None
         d = <CallbackData>data
@@ -848,17 +784,7 @@ cdef void typedDictToMap(dict ndict, dict atypes, VSMap *inm, VSCore *core, cons
             else:
                 raise Error('argument ' + key + ' has an unknown type: ' + atypes[key])
 
-cdef class VideoFormat(object):
-    cdef readonly uint32_t id
-    cdef readonly str name
-    cdef readonly object color_family
-    cdef readonly object sample_type
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly int subsampling_w
-    cdef readonly int subsampling_h
-    cdef readonly int num_planes
-
+cdef class VideoFormat:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -932,12 +858,7 @@ cdef VideoFormat createVideoFormat(const VSVideoFormat *f, const VSAPI *funcs, V
     instance.id = funcs.queryVideoFormatID(instance.color_family, instance.sample_type, instance.bits_per_sample, instance.subsampling_w, instance.subsampling_h, core)
     return instance
 
-cdef class FrameProps(object):
-    cdef RawFrame frame
-    cdef VSCore *core
-    cdef const VSAPI *funcs
-    cdef bint readonly
-
+cdef class FrameProps:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1195,15 +1116,7 @@ class ChannelLayout(int):
             f'\tLayout: {layout}\n'
         )
 
-cdef class RawFrame(object):
-    cdef const VSFrame *constf
-    cdef VSFrame *f
-    cdef VSCore *core
-    cdef const VSAPI *funcs
-    cdef unsigned flags
-
-    cdef object __weakref__
-
+cdef class RawFrame:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1282,10 +1195,6 @@ cdef class RawFrame(object):
 
 
 cdef class VideoFrame(RawFrame):
-    cdef readonly VideoFormat format
-    cdef readonly int width
-    cdef readonly int height
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1387,34 +1296,25 @@ cdef VideoFrame createVideoFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
     return instance
 
 
-@cython.final
-@cython.internal
-cdef class _frame:
+cdef void* _frame_getdata(VSFrame* frame, int index, unsigned* flags, const VSAPI* lib) noexcept nogil:
+    cdef:
+        unsigned mask
 
-    @staticmethod
-    cdef void* getdata(VSFrame* frame, int index, unsigned* flags, const VSAPI* lib) noexcept nogil:
-        cdef:
-            unsigned mask
-
-        if lib.getFrameType(frame) == mtVideo:
-            mask = 1 << index+1
-        else:
-            mask = ~1  # there's only one plane in audio frames
-        if flags[0] & mask:  # trigger copy-on-write
-            flags[0] &= ~mask  # only do so once, see GH-724
-            return <void*> lib.getWritePtr(frame, index)
-        else:
-            return <void*> lib.getReadPtr(frame, index)
+    if lib.getFrameType(frame) == mtVideo:
+        mask = 1 << index+1
+    else:
+        mask = ~1  # there's only one plane in audio frames
+    if flags[0] & mask:  # trigger copy-on-write
+        flags[0] &= ~mask  # only do so once, see GH-724
+        return <void*> lib.getWritePtr(frame, index)
+    else:
+        return <void*> lib.getReadPtr(frame, index)
 
 
 @cython.final
 @cython.internal
 @cython.freelist(16)
 cdef class _2dview:
-    cdef:
-        Py_buffer base
-        ssize_t smalltable[4]  # shape, strides
-
     def __cinit__(self):
         # need Py_buffer.obj to be non-NULL
         PyBuffer_FillInfo(&self.base, None, NULL, 0, True, PyBUF_SIMPLE)
@@ -1446,11 +1346,9 @@ cdef class _2dview:
 @cython.final
 @cython.internal
 cdef class _video:
-
     @staticmethod
     cdef _2dview allocinfo(const VSVideoFormat* format):
-        cdef:
-            _2dview self
+        cdef _2dview self
 
         self = _2dview.__new__(_2dview)
         self.base.itemsize = format.bytesPerSample
@@ -1477,7 +1375,7 @@ cdef class _video:
         view.shape[0] = lib.getFrameHeight(frame, plane)
         view.strides[0] = lib.getStride(frame, plane)
         view.len = view.shape[0] * view.shape[1] * view.itemsize
-        view.buf = _frame.getdata(frame, plane, flags, lib)
+        view.buf = _frame_getdata(frame, plane, flags, lib)
 
     @staticmethod
     cdef void filllineinfo(Py_buffer* view, VSFrame* frame, int plane, int line, unsigned* flags, const VSAPI* lib) nogil:
@@ -1485,15 +1383,9 @@ cdef class _video:
         view.shape[0] = 1
         view.strides[0] = lib.getStride(frame, plane)
         view.len = view.shape[0] * view.shape[1] * view.itemsize
-        view.buf = <void *>(<uint8_t *>_frame.getdata(frame, plane, flags, lib) + lib.getStride(frame, plane) * line)
+        view.buf = <void *>(<uint8_t *>_frame_getdata(frame, plane, flags, lib) + lib.getStride(frame, plane) * line)
 
 cdef class AudioFrame(RawFrame):
-    cdef readonly object sample_type
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly int64_t channel_layout
-    cdef readonly int num_channels
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1589,10 +1481,6 @@ cdef AudioFrame createAudioFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
 @cython.internal
 @cython.freelist(16)
 cdef class _1dview_contig:
-    cdef:
-        Py_buffer base
-        ssize_t smalltable[1]  # shape
-
     def __cinit__(self):
         # need Py_buffer.obj to be non-NULL
         PyBuffer_FillInfo(&self.base, None, NULL, 0, True, PyBUF_SIMPLE)
@@ -1621,11 +1509,9 @@ cdef class _1dview_contig:
 @cython.final
 @cython.internal
 cdef class _audio:
-
     @staticmethod
     cdef _1dview_contig allocinfo(const VSAudioFormat* format):
-        cdef:
-            _1dview_contig self
+        cdef _1dview_contig self
 
         self = _1dview_contig.__new__(_1dview_contig)
         self.base.itemsize = format.bytesPerSample
@@ -1645,9 +1531,9 @@ cdef class _audio:
     cdef void fillinfo(Py_buffer* view, VSFrame* frame, int channel, unsigned* flags, const VSAPI* lib) nogil:
         view.shape[0] = lib.getFrameLength(frame)
         view.len = view.shape[0] * view.itemsize
-        view.buf = _frame.getdata(frame, channel, flags, lib)
+        view.buf = _frame_getdata(frame, channel, flags, lib)
 
-cdef _get_handle_future():
+cdef object _get_handle_future():
     fut = Future()
     fut.set_running_or_notify_cancel()
 
@@ -1661,13 +1547,7 @@ cdef _get_handle_future():
 
     return _handle_future
 
-cdef class RawNode(object):
-    cdef VSNode *node
-    cdef const VSAPI *funcs
-    cdef Core core
-
-    cdef object __weakref__
-
+cdef class RawNode:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1814,7 +1694,7 @@ cdef class RawNode(object):
     cdef bint _inspectable(self):
         if self.funcs.getAPIVersion() != VAPOURSYNTH_API_VERSION:
             return False
-        return bool(self.core.flags & ccfEnableGraphInspection)
+        return self.core.creationFlags & ccfEnableGraphInspection
 
     def is_inspectable(self, version=None):
         if version != 0:
@@ -1915,15 +1795,6 @@ cdef class RawNode(object):
 
 
 cdef class VideoNode(RawNode):
-    cdef const VSVideoInfo *vi
-    cdef readonly VideoFormat format
-    cdef readonly int width
-    cdef readonly int height
-    cdef readonly int num_frames
-    cdef readonly int64_t fps_num
-    cdef readonly int64_t fps_den
-    cdef readonly object fps
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2157,16 +2028,6 @@ cdef VideoNode createVideoNode(VSNode *node, const VSAPI *funcs, Core core):
     return instance
 
 cdef class AudioNode(RawNode):
-    cdef const VSAudioInfo *ai
-    cdef readonly object sample_type
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly uint64_t channel_layout
-    cdef readonly int num_channels
-    cdef readonly int sample_rate
-    cdef readonly int64_t num_samples
-    cdef readonly int num_frames
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2438,10 +2299,7 @@ cdef AudioNode createAudioNode(VSNode *node, const VSAPI *funcs, Core core):
     instance.num_channels = instance.ai.format.numChannels
     return instance
 
-cdef class LogHandle(object):
-    cdef VSLogHandle *handle
-    cdef object handler_func
-
+cdef class LogHandle:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2451,20 +2309,16 @@ cdef LogHandle createLogHandle(object handler_func):
     instance.handle = NULL
     return instance
 
-cdef void __stdcall log_handler_wrapper(int msgType, const char *msg, void *userData) noexcept nogil:
+cdef void log_handler_wrapper(int msgType, const char *msg, void *userData) noexcept nogil:
     with gil:
         (<LogHandle>userData).handler_func(msgType, msg.decode('utf-8'))
 
-cdef void __stdcall log_handler_free(void *userData) noexcept nogil:
+cdef void log_handler_free(void *userData) noexcept nogil:
     with gil:
         Py_DECREF(<LogHandle>userData)
 
 
-cdef class CoreTimings(object):
-    cdef Core core
-
-    cdef object __weakref__
-
+cdef class CoreTimings:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2505,15 +2359,7 @@ cdef CoreTimings createCoreTimings(Core core):
     return instance
 
 
-cdef class Core(object):
-    cdef int creationFlags
-    cdef VSCore *core
-    cdef const VSAPI *funcs
-
-    cdef readonly object timings
-
-    cdef object __weakref__
-
+cdef class Core:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2717,8 +2563,7 @@ cdef Core vsscript_get_core_internal(EnvironmentData env):
         env.core = createCore(env)
     return env.core
 
-cdef class _CoreProxy(object):
-
+cdef class _CoreProxy:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2782,15 +2627,7 @@ class PluginVersion(typing.NamedTuple):
     major: int
     minor: int
 
-cdef class Plugin(object):
-    cdef Core core
-    cdef VSPlugin *plugin
-    cdef const VSAPI *funcs
-    cdef object injected_arg
-    cdef readonly str identifier
-    cdef readonly str namespace
-    cdef readonly str name
-
+cdef class Plugin:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2872,14 +2709,7 @@ cdef Plugin createPlugin(VSPlugin *plugin, const VSAPI *funcs, Core core):
     instance.name = funcs.getPluginName(plugin).decode('utf-8')
     return instance
 
-cdef class Function(object):
-    cdef const VSAPI *funcs
-    cdef const VSPluginFunction *func
-    cdef readonly Plugin plugin
-    cdef readonly str name
-    cdef readonly str signature
-    cdef readonly str return_signature
-
+cdef class Function:
     @property
     def __signature__(self):
         return construct_signature(
@@ -3013,6 +2843,36 @@ cdef Function createFunction(VSPluginFunction *func, Plugin plugin, const VSAPI 
     return instance
 
 
+cdef void freeFunc(void *pobj) noexcept nogil:
+    with gil:
+        fobj = <FuncData>pobj
+        Py_DECREF(fobj)
+        fobj = None
+
+
+cdef void publicFunction(const VSMap *inm, VSMap *outm, void *userData, VSCore *core, const VSAPI *vsapi) noexcept nogil:
+    with gil:
+        d = <FuncData>userData
+        try:
+            with use_environment(d.env).use():
+                m = mapToDict(inm, False)
+                ret = d(**m)
+                if not isinstance(ret, dict):
+                    if ret is None:
+                        ret = 0
+                    ret = {'val':ret}
+                dictToMap(ret, outm, core, vsapi)
+        except BaseException as e:
+            emsg = b'\n' + ''.join(traceback.format_exception(type(e), e, e.__traceback__)).encode('utf-8')
+            vsapi.mapSetError(outm, emsg)
+
+
+cdef const VSAPI *getVSAPIInternal() except NULL nogil:
+    global _vsapi
+    if _vsapi == NULL:
+        _vsapi = getVapourSynthAPI(VAPOURSYNTH_API_VERSION)
+    return _vsapi
+
 
 # for python functions being executed by vs
 
@@ -3036,8 +2896,8 @@ def _showwarning(message, category, filename, lineno, file=None, line=None):
         core = vsscript_get_core_internal(env)
         core.log_message(mtWarning, s)
 
-class PythonVSScriptLoggingBridge(logging.Handler):
 
+class PythonVSScriptLoggingBridge(logging.Handler):
     def __init__(self, parent, level=logging.NOTSET):
         super().__init__(level)
         self._parent = parent
@@ -3065,30 +2925,6 @@ class PythonVSScriptLoggingBridge(logging.Handler):
 
         core.log_message(mt, message)
 
-cdef void __stdcall freeFunc(void *pobj) noexcept nogil:
-    with gil:
-        fobj = <FuncData>pobj
-        Py_DECREF(fobj)
-        fobj = None
-
-
-cdef void __stdcall publicFunction(const VSMap *inm, VSMap *outm, void *userData, VSCore *core, const VSAPI *vsapi) noexcept nogil:
-    with gil:
-        d = <FuncData>userData
-        try:
-            with use_environment(d.env).use():
-                m = mapToDict(inm, False)
-                ret = d(**m)
-                if not isinstance(ret, dict):
-                    if ret is None:
-                        ret = 0
-                    ret = {'val':ret}
-                dictToMap(ret, outm, core, vsapi)
-        except BaseException as e:
-            emsg = b'\n' + ''.join(traceback.format_exception(type(e), e, e.__traceback__)).encode('utf-8')
-            vsapi.mapSetError(outm, emsg)
-
-
 @cython.final
 cdef class VSScriptEnvironmentPolicy:
     cdef dict _env_map
@@ -3102,7 +2938,7 @@ cdef class VSScriptEnvironmentPolicy:
     def __init__(self):
         raise RuntimeError("Cannot instantiate this class directly.")
 
-    def on_policy_registered(self, policy_api):
+    def on_policy_registered(self, EnvironmentPolicyAPI policy_api):
         global _warnings_showwarning
 
         self._stack = threading.local()
@@ -3285,6 +3121,7 @@ cdef public api int vpy4_createScript(VSScript *se) nogil:
             return 1
         return 0
 
+
 cdef public api int vpy4_evaluateBuffer(VSScript *se, const char *buffer, const char *scriptFilename) nogil:
     with gil:
         try:
@@ -3454,11 +3291,6 @@ cdef public api VSCore *vpy4_getCore(VSScript *se) nogil:
 cdef public api const VSAPI *vpy4_getVSAPI(int version) nogil:
     return getVapourSynthAPI(version)
 
-cdef const VSAPI *getVSAPIInternal() nogil:
-    global _vsapi
-    if _vsapi == NULL:
-        _vsapi = getVapourSynthAPI(VAPOURSYNTH_API_VERSION)
-    return _vsapi
 
 cdef public api int vpy4_getVariable(VSScript *se, const char *name, VSMap *dst) nogil:
     with gil:
