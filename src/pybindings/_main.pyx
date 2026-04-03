@@ -3086,14 +3086,14 @@ cdef int _vpy_evaluate(VSScript *se, bytes script, str filename):
         with _vsscript_use_or_create_environment2(se.id, se).use():
             exec(code, pyenvdict, pyenvdict)
 
-    except SystemExit, e:
-        se.exitCode = e.code
+    except SystemExit as e:
+        se.exitCode = int(e.code)
         errstr = 'Python exit with code ' + str(e.code) + '\n'
         errstr = errstr.encode('utf-8')
         Py_INCREF(errstr)
         se.errstr = <void *>errstr
         return 3
-    except BaseException, e:
+    except BaseException as e:
         errstr = 'Python exception: ' + str(e) + '\n\n' + traceback.format_exc()
         errstr = errstr.encode('utf-8')
         Py_INCREF(errstr)
@@ -3142,7 +3142,7 @@ cdef public api int vpy4_evaluateBuffer(VSScript *se, const char *buffer, const 
             else:
                 return _vpy_evaluate(se, buffer, fn)
 
-        except BaseException, e:
+        except BaseException as e:
             errstr = 'File reading exception:\n' + str(e)
             errstr = errstr.encode('utf-8')
             Py_INCREF(errstr)
@@ -3158,7 +3158,7 @@ cdef public api int vpy4_evaluateFile(VSScript *se, const char *scriptFilename) 
             with open(scriptFilename.decode('utf-8'), 'rb') as f:
                 script = f.read(1024*1024*16)
             return vpy4_evaluateBuffer(se, script, scriptFilename)
-        except BaseException, e:
+        except BaseException as e:
             errstr = 'File reading exception:\n' + str(e)
             errstr = errstr.encode('utf-8')
             Py_INCREF(errstr)
