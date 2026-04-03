@@ -17,7 +17,7 @@
 # License along with VapourSynth; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 #
-from libc.stdint cimport uint8_t, uint32_t, int64_t, uint64_t, uintptr_t
+from libc.stdint cimport uint8_t, uint32_t, int64_t, uint64_t
 from libc.stddef cimport ptrdiff_t
 
 cdef extern from "include/VapourSynth4.h" nogil:

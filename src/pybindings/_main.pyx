@@ -19,12 +19,13 @@
 """ This is the VapourSynth module implementing the Python bindings. """
 
 cimport cython
-from cpython.buffer cimport PyBUF_SIMPLE, PyBuffer_FillInfo, PyBuffer_Release
-from cpython.memoryview cimport PyMemoryView_FromObject
+from cpython.buffer cimport PyBUF_READ, PyBUF_SIMPLE, PyBuffer_FillInfo, PyBuffer_Release
+from cpython.memoryview cimport PyMemoryView_FromMemory, PyMemoryView_FromObject
 from cpython.ref cimport Py_DECREF, Py_INCREF
-from libc.stdint cimport int64_t, uint8_t, uint32_t
+from libc.stdint cimport int64_t, uint8_t, uint32_t, uintptr_t
 from libc.stdlib cimport free, malloc, realloc
 from vapoursynth4 cimport *
+from vshelper4 cimport bitblt
 from vsconstants4 cimport *
 from vsscript_internal cimport VSScript
 from wave cimport (
@@ -1893,17 +1894,71 @@ cdef class VideoNode(RawNode):
             fileobj.write(data.encode("ascii"))
 
         write = fileobj.write
-        readchunks = VideoFrame.readchunks
 
-        for idx, frame in enumerate(self.frames(prefetch, backlog, close=True)):
-            if y4m:
-                fileobj.write(b"FRAME\n")
+        cdef:
+            const VSAPI *lib = self.funcs
+            const VSVideoFormat *fi
+            uint8_t *buffer = NULL
+            size_t buffer_size = <size_t>0
+            ptrdiff_t stride
+            const uint8_t *readPtr
+            size_t rowSize
+            int height
+            int p
+            const VSFrame *constf
 
-            for chunk in readchunks(frame):
-                write(chunk)
+        # Pre-allocate buffer for packing
+        buffer_size = <size_t>(self.width * self.height * self.format.bytes_per_sample)
+        buffer = <uint8_t *>malloc(buffer_size)
+        if not buffer:
+            raise Error("Failed to allocate memory for output buffer")
 
-            if progress_update is not None:
-                progress_update(idx+1, len(self))
+        try:
+            for idx, frame in enumerate(self.frames(prefetch, backlog, close=True)):
+                if y4m:
+                    fileobj.write(b"FRAME\n")
+                
+                constf = (<VideoFrame>frame).constf
+                fi = lib.getVideoFrameFormat(constf)
+                for p in range(fi.numPlanes):
+                    stride = lib.getStride(constf, p)
+                    readPtr = lib.getReadPtr(constf, p)
+                    rowSize = <size_t>lib.getFrameWidth(constf, p) * fi.bytesPerSample
+                    height = lib.getFrameHeight(constf, p)
+                    
+                    if stride == <ptrdiff_t>rowSize:
+                        write(PyMemoryView_FromMemory(<char *>readPtr, rowSize * height, PyBUF_READ))
+                    else:
+                        with nogil:
+                            bitblt(buffer, rowSize, readPtr, stride, rowSize, height)
+                        write(PyMemoryView_FromMemory(<char *>buffer, rowSize * height, PyBUF_READ))
+
+                alpha = frame.props.get("_Alpha")
+                if alpha is not None:
+                    if y4m:
+                        raise ValueError("Can only apply y4m headers to clips without alpha")
+
+                    constf = (<VideoFrame>alpha).constf
+                    fi = lib.getVideoFrameFormat(constf)
+                    for p in range(fi.numPlanes):
+                        stride = lib.getStride(constf, p)
+                        readPtr = lib.getReadPtr(constf, p)
+                        rowSize = <size_t>lib.getFrameWidth(constf, p) * fi.bytesPerSample
+                        height = lib.getFrameHeight(constf, p)
+                        
+                        if stride == <ptrdiff_t>rowSize:
+                            write(PyMemoryView_FromMemory(<char *>readPtr, rowSize * height, PyBUF_READ))
+                        else:
+                            with nogil:
+                                bitblt(buffer, rowSize, readPtr, stride, rowSize, height)
+                            write(PyMemoryView_FromMemory(<char *>buffer, rowSize * height, PyBUF_READ))
+
+                    alpha.close()
+
+                if progress_update is not None:
+                    progress_update(idx + 1, len(self))
+        finally:
+            free(buffer)
 
         if hasattr(fileobj, "flush"):
             fileobj.flush()
