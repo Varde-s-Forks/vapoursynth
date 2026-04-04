@@ -170,6 +170,46 @@ class VSPipeTestCase(unittest.TestCase):
         self.assertEqual(ret, 1)
         self.assertIn("Invalid output index", stderr)
 
+    @unittest.skipIf(os.name != "nt", "Named pipes are only supported on Windows")
+    def test_named_pipe(self) -> None:
+        import threading
+        import time
+
+        pipe_name = r"\\.\pipe\vspipe_test_pipe"
+
+        read_data = []
+
+        def pipe_reader() -> None:
+            for _ in range(50):
+                try:
+                    with open(pipe_name, "rb") as f:
+                        if chunk := f.read(1024):
+                            read_data.append(chunk)
+                        while f.read(65536):
+                            pass
+                    return
+                except (FileNotFoundError, PermissionError):
+                    time.sleep(0.1)
+                except Exception as e:
+                    read_data.append(e)
+                    return
+
+        reader_thread = threading.Thread(target=pipe_reader)
+        reader_thread.start()
+
+        try:
+            ret, _, stderr = self.run_vspipe(["-s", "0", "-e", "9", str(self.test_vpy), pipe_name])
+            self.assertEqual(ret, 0, f"Error: {stderr}")
+            self.assertIn("Output 10 frames", stderr)
+        finally:
+            reader_thread.join(timeout=5)
+
+        self.assertTrue(len(read_data) > 0, "No data was read from the pipe")
+        self.assertIsInstance(
+            read_data[0], bytes, f"Reader encountered an error: {read_data[0] if read_data else 'None'}"
+        )
+        self.assertTrue(len(read_data[0]) > 0, "Read empty data from the pipe")
+
 
 if __name__ == "__main__":
     unittest.main()
