@@ -247,17 +247,18 @@ class CoreTimings:
 
 
 class _VideoFormatDict(TypedDict):
-    id: int
-    name: str
     color_family: ColorFamily
     sample_type: SampleType
     bits_per_sample: Literal[
         8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
     ]
-    bytes_per_sample: int
     subsampling_w: Literal[0, 1, 2, 3, 4]
     subsampling_h: Literal[0, 1, 2, 3, 4]
-    num_planes: Literal[1, 3]
+
+class _AudioFormatDict(TypedDict):
+    bits_per_sample: int
+    channel_layout: ChannelLayout
+    sample_type: SampleType
 
 class VideoFormat:
     id: Final[int]
@@ -286,6 +287,24 @@ class VideoFormat:
         subsampling_h: _IntLike = ...,
     ) -> Self: ...
     def _as_dict(self) -> _VideoFormatDict: ...
+
+class AudioFormat:
+    name: Final[str]
+    sample_type: Final[SampleType]
+    bits_per_sample: Final[int]
+    bytes_per_sample: Final[int]
+    num_channels: Final[int]
+    channel_layout: Final[ChannelLayout]
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def replace(
+        self,
+        *,
+        sample_type: SampleType = ...,
+        bits_per_sample: _IntLike = ...,
+        channel_layout: _IntLike = ...,
+    ) -> Self: ...
+    def _as_dict(self) -> _AudioFormatDict: ...
 
 # Behave like a Collection
 class ChannelLayout(int):
@@ -649,15 +668,26 @@ class VideoFrame(RawFrame):
 
 # Behave like a Sequence
 class AudioFrame(RawFrame):
-    sample_type: Final[SampleType]
-    bits_per_sample: Final[int]
-    bytes_per_sample: Final[int]
-    channel_layout: Final[int]
-    num_channels: Final[int]
-
-    def __getitem__(self, index: SupportsIndex) -> _audio_view: ...
+    format: Final[AudioFormat]
+    @deprecated("use '.format.sample_type' instead")
+    @property
+    def sample_type(self) -> SampleType: ...
+    @deprecated("use '.format.bits_per_sample' instead")
+    @property
+    def bits_per_sample(self) -> int: ...
+    @deprecated("use '.format.bytes_per_sample' instead")
+    @property
+    def bytes_per_sample(self) -> int: ...
+    @deprecated("use '.format.channel_layout' instead")
+    @property
+    def channel_layout(self) -> ChannelLayout: ...
+    @deprecated("use '.format.num_channels' instead")
+    @property
+    def num_channels(self) -> int: ...
+    @deprecated("use '.format.channel_layout' instead")
     @property
     def channels(self) -> ChannelLayout: ...
+    def __getitem__(self, index: SupportsIndex) -> _audio_view: ...
 
 class RawNode:
     def __repr__(self) -> str: ...
@@ -748,16 +778,30 @@ class VideoNode(RawNode):
 
 # Behave like a Sequence
 class AudioNode(RawNode):
-    sample_type: Final[SampleType]
-    bits_per_sample: Final[int]
-    bytes_per_sample: Final[int]
-    channel_layout: Final[int]
-    num_channels: Final[int]
+    format: Final[AudioFormat]
+
+    @deprecated("use '.format.sample_type' instead")
+    @property
+    def sample_type(self) -> SampleType: ...
+    @deprecated("use '.format.bits_per_sample' instead")
+    @property
+    def bits_per_sample(self) -> int: ...
+    @deprecated("use '.format.bytes_per_sample' instead")
+    @property
+    def bytes_per_sample(self) -> int: ...
+    @deprecated("use '.format.num_channels' instead")
+    @property
+    def num_channels(self) -> int: ...
+    @deprecated("use '.format.channel_layout' instead")
+    @property
+    def channel_layout(self) -> ChannelLayout: ...
+    @deprecated("use '.format.channel_layout' instead")
+    @property
+    def channels(self) -> ChannelLayout: ...
+
     sample_rate: Final[int]
     num_samples: Final[int]
     num_frames: Final[int]
-    @property
-    def channels(self) -> ChannelLayout: ...
     def get_frame(self, n: _IntLike) -> AudioFrame: ...
     @overload  # type: ignore[override]
     def get_frame_async(self, n: _IntLike) -> Future[AudioFrame]: ...
@@ -817,6 +861,12 @@ class Core:
         subsampling_w: _IntLike = 0,
         subsampling_h: _IntLike = 0,
     ) -> VideoFormat: ...
+    def query_audio_format(
+        self,
+        sample_type: _IntLike,
+        bits_per_sample: _IntLike,
+        channel_layout: _IntLike,
+    ) -> AudioFormat: ...
     def get_video_format(self, id: _IntLike) -> VideoFormat: ...
     def create_video_frame(self, format: VideoFormat, width: _IntLike, height: _IntLike) -> VideoFrame: ...
     def log_message(self, message_type: _IntLike, message: str) -> None: ...

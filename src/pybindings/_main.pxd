@@ -103,17 +103,27 @@ cdef void dictToMap(dict ndict, VSMap *inm, VSCore *core, const VSAPI *funcs) ex
 cdef void typedDictToMap(dict ndict, dict atypes, VSMap *inm, VSCore *core, const VSAPI *funcs, bint filterAllInts) except *
 
 cdef class VideoFormat: 
+    cdef readonly object color_family
+    cdef readonly object sample_type
     cdef readonly int bits_per_sample
     cdef readonly int bytes_per_sample
-    cdef readonly object color_family
+    cdef readonly int subsampling_w
+    cdef readonly int subsampling_h
+    cdef readonly int num_planes
     cdef readonly uint32_t id
     cdef readonly str name
-    cdef readonly int num_planes
-    cdef readonly object sample_type
-    cdef readonly int subsampling_h
-    cdef readonly int subsampling_w
 
 cdef VideoFormat createVideoFormat(const VSVideoFormat *f, const VSAPI *funcs, VSCore *core)
+
+cdef class AudioFormat:
+    cdef uint64_t channelLayout
+    cdef readonly object sample_type
+    cdef readonly int bits_per_sample
+    cdef readonly int bytes_per_sample
+    cdef readonly int num_channels
+    cdef readonly str name
+
+cdef AudioFormat createAudioFormat(const VSAudioFormat *f, const VSAPI *funcs, VSCore *core)
 
 cdef class FrameProps: 
     cdef VSCore *core
@@ -155,12 +165,8 @@ cdef class _video:
     @staticmethod
     cdef void filllineinfo(Py_buffer* view, VSFrame* frame, int plane, int line, unsigned* flags, const VSAPI* lib) nogil
 
-cdef class AudioFrame(RawFrame): 
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly int64_t channel_layout
-    cdef readonly int num_channels
-    cdef readonly object sample_type
+cdef class AudioFrame(RawFrame):
+    cdef readonly AudioFormat format
 
 cdef AudioFrame createConstAudioFrame(const VSFrame *constf, const VSAPI *funcs, VSCore *core)
 cdef AudioFrame createAudioFrame(VSFrame *f, const VSAPI *funcs, VSCore *core)
@@ -187,13 +193,13 @@ cdef class RawNode:
     cdef bint _inspectable(self)
 
 cdef class VideoNode(RawNode):
+    cdef const VSVideoInfo *vi
     cdef readonly VideoFormat format
     cdef readonly object fps
     cdef readonly int64_t fps_den
     cdef readonly int64_t fps_num
     cdef readonly int height
     cdef readonly int num_frames
-    cdef const VSVideoInfo *vi
     cdef readonly int width
 
     cdef ensure_valid_frame_number(self, int n)
@@ -201,14 +207,10 @@ cdef VideoNode createVideoNode(VSNode *node, const VSAPI *funcs, Core core)
 
 cdef class AudioNode(RawNode):
     cdef const VSAudioInfo *ai
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly uint64_t channel_layout
-    cdef readonly int num_channels
+    cdef readonly AudioFormat format
     cdef readonly int num_frames
     cdef readonly int64_t num_samples
     cdef readonly int sample_rate
-    cdef readonly object sample_type
 
     cdef ensure_valid_frame_number(self, int n)
 cdef AudioNode createAudioNode(VSNode *node, const VSAPI *funcs, Core core)

@@ -823,7 +823,9 @@ cdef class VideoFormat:
 
     def __repr__(self):
         return _construct_repr(
-            self, id=self.id, name=self.name,
+            self,
+            id=self.id,
+            name=self.name,
             color_family=self.color_family,
             sample_type=self.sample_type,
             bits_per_sample=self.bits_per_sample,
@@ -864,6 +866,86 @@ cdef VideoFormat createVideoFormat(const VSVideoFormat *f, const VSAPI *funcs, V
     instance.num_planes = f.numPlanes
     instance.id = funcs.queryVideoFormatID(instance.color_family, instance.sample_type, instance.bits_per_sample, instance.subsampling_w, instance.subsampling_h, core)
     return instance
+
+
+class ChannelLayout(int):
+    def __contains__(self, int layout):
+        return bool(self & (1 << layout))
+
+    def __iter__(self):
+        for v in AudioChannels:
+            if ((1 << v) & self):
+                yield v
+
+    def __len__(self):
+        return self.bit_count()
+
+    def __repr__(self):
+        return _construct_repr(self, num_channels=len(self), layout=iter(self))
+
+    def __str__(self):
+        layout = ', '.join(c.name for c in self)
+
+        return (
+            'ChannelLayout\n'
+            f'\tNum channels: {len(self):d}\n'
+            f'\tLayout: {layout}\n'
+        )
+
+
+cdef class AudioFormat:
+    def __init__(self):
+        raise Error('Class cannot be instantiated directly')
+
+    @property
+    def channel_layout(self):
+        return ChannelLayout(self.channelLayout)
+
+    def _as_dict(self):
+        return {
+            'bits_per_sample': self.bits_per_sample,
+            'channel_layout': self.channel_layout,
+            'sample_type': self.sample_type,
+        }
+
+    def replace(self, **kwargs):
+        core = kwargs.pop("core", None) or _get_core()
+        vals = self._as_dict()
+        vals.update(**kwargs)
+        return core.query_audio_format(**vals)
+
+    def __repr__(self):
+        return _construct_repr(
+            self,
+            name=self.name,
+            sample_type=self.sample_type,
+            bits_per_sample=self.bits_per_sample,
+            bytes_per_sample=self.bytes_per_sample,
+        )
+
+    def __str__(self):
+        return (
+            'AudioFormat\n'
+            f'\tName: {self.name}\n'
+            f'\tSample Type: {self.sample_type.name}\n'
+            f'\tBits Per Sample: {self.bits_per_sample:d}\n'
+            f'\tBytes Per Sample: {self.bytes_per_sample:d}\n'
+            f'\tNum Channels: {self.num_channels:d}\n'
+        ) + str(self.channel_layout)
+
+
+cdef AudioFormat createAudioFormat(const VSAudioFormat *f, const VSAPI *funcs, VSCore *core):
+    cdef AudioFormat instance = AudioFormat.__new__(AudioFormat)
+    cdef char[32] nameBuffer
+    funcs.getAudioFormatName(f, nameBuffer)
+    instance.name = nameBuffer.decode('utf-8')
+    instance.sample_type = SampleType(f.sampleType)
+    instance.bits_per_sample = f.bitsPerSample
+    instance.bytes_per_sample = f.bytesPerSample
+    instance.num_channels = f.numChannels
+    instance.channelLayout = f.channelLayout
+    return instance
+
 
 cdef class FrameProps:
     def __init__(self):
@@ -1102,33 +1184,6 @@ cdef FrameProps createFrameProps(RawFrame f):
     instance.readonly = f.readonly
     return instance
 
-
-
-class ChannelLayout(int):
-    def __contains__(self, layout):
-        return bool(self & (1 << layout))
-
-    def __iter__(self):
-        for v in AudioChannels:
-            if ((1 << v) & self):
-                yield v
-
-    def __len__(self):
-        return self.bit_count()
-
-    def __repr__(self):
-        return _construct_repr(
-            self, num_channels=len(self), layout=iter(self)
-        )
-
-    def __str__(self):
-        layout = ', '.join([c.name for c in self])
-
-        return (
-            'ChannelLayout\n'
-            f'\tNum channels: {len(self):d}\n'
-            f'\tLayout: {layout}\n'
-        )
 
 cdef class RawFrame:
     def __init__(self):
@@ -1409,7 +1464,33 @@ cdef class AudioFrame(RawFrame):
 
     @property
     def channels(self):
-        return ChannelLayout(self.channel_layout)
+        warnings.warn("channels is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
+
+    @property
+    def channel_layout(self):
+        warnings.warn("channel_layout is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
+
+    @property
+    def bits_per_sample(self):
+        warnings.warn("bits_per_sample is deprecated, use '.format.bits_per_sample' instead", DeprecationWarning)
+        return self.format.bits_per_sample
+
+    @property
+    def bytes_per_sample(self):
+        warnings.warn("bytes_per_sample is deprecated, use '.format.bytes_per_sample' instead", DeprecationWarning)
+        return self.format.bytes_per_sample
+
+    @property
+    def num_channels(self):
+        warnings.warn("num_channels is deprecated, use '.format.num_channels' instead", DeprecationWarning)
+        return self.format.num_channels
+
+    @property
+    def sample_type(self):
+        warnings.warn("sample_type is deprecated, use '.format.sample_type' instead", DeprecationWarning)
+        return self.format.sample_type
 
     def __getitem__(self, int index) -> memoryview:
         self._ensure_open()
@@ -1438,22 +1519,24 @@ cdef class AudioFrame(RawFrame):
 
     def __repr__(self):
         return _construct_repr(
-            self, sample_type=self.sample_type,
-            bits_per_sample=self.bits_per_sample,
-            bytes_per_sample=self.bytes_per_sample,
-            num_channels=self.num_channels, channels=iter(self.channels),
+            self,
+            sample_type=self.format.sample_type,
+            bits_per_sample=self.format.bits_per_sample,
+            bytes_per_sample=self.format.bytes_per_sample,
+            num_channels=self.format.num_channels,
+            channels=iter(self.format.channel_layout),
             readonly=self.readonly
         )
 
     def __str__(self):
-        channels = ', '.join([c.name for c in self.channels])
+        channels = ', '.join(c.name for c in self.format.channel_layout)
 
         return (
             'AudioFrame\n'
-            f'\tSample Type: {self.sample_type.name}\n'
-            f'\tBits Per Sample: {self.bits_per_sample:d}\n'
-            f'\tBytes Per Sample: {self.bytes_per_sample:d}\n'
-            f'\tNum Channels: {self.num_channels:d}\n'
+            f'\tSample Type: {self.format.sample_type.name}\n'
+            f'\tBits Per Sample: {self.format.bits_per_sample:d}\n'
+            f'\tBytes Per Sample: {self.format.bytes_per_sample:d}\n'
+            f'\tNum Channels: {self.format.num_channels:d}\n'
             f'\tChannels: {channels}\n'
             f'\tReadonly: {str(self.readonly)}\n'
         )
@@ -1467,13 +1550,8 @@ cdef AudioFrame createConstAudioFrame(const VSFrame *constf, const VSAPI *funcs,
     instance.core = core
     instance.flags = 0
     cdef const VSAudioFormat *format = funcs.getAudioFrameFormat(constf)
-    instance.sample_type = SampleType(format.sampleType)
-    instance.bits_per_sample = format.bitsPerSample
-    instance.bytes_per_sample = format.bytesPerSample
-    instance.channel_layout = format.channelLayout
-    instance.num_channels = format.numChannels
+    instance.format = createAudioFormat(format, funcs, core)
     return instance
-
 
 cdef AudioFrame createAudioFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
     cdef AudioFrame instance = AudioFrame.__new__(AudioFrame)
@@ -1483,11 +1561,7 @@ cdef AudioFrame createAudioFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
     instance.core = core
     instance.flags = -1
     cdef const VSAudioFormat *format = funcs.getAudioFrameFormat(f)
-    instance.sample_type = SampleType(format.sampleType)
-    instance.bits_per_sample = format.bitsPerSample
-    instance.bytes_per_sample = format.bytesPerSample
-    instance.channel_layout = format.channelLayout
-    instance.num_channels = format.numChannels
+    instance.format = createAudioFormat(format, funcs, core)
     return instance
 
 
@@ -2123,17 +2197,47 @@ cdef class AudioNode(RawNode):
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
-    def __getattr__(self, name):
-        err = False
+    @property
+    def channel_layout(self):
+        warnings.warn("channel_layout is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
+
+    @property
+    def channels(self):
+        warnings.warn("channels is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
+
+    @property
+    def bits_per_sample(self):
+        warnings.warn("bits_per_sample is deprecated, use '.format.bits_per_sample' instead", DeprecationWarning)
+        return self.format.bits_per_sample
+
+    @property
+    def bytes_per_sample(self):
+        warnings.warn("bytes_per_sample is deprecated, use '.format.bytes_per_sample' instead", DeprecationWarning)
+        return self.format.bytes_per_sample
+
+    @property
+    def num_channels(self):
+        warnings.warn("num_channels is deprecated, use '.format.num_channels' instead", DeprecationWarning)
+        return self.format.num_channels
+
+    @property
+    def sample_type(self):
+        warnings.warn("sample_type is deprecated, use '.format.sample_type' instead", DeprecationWarning)
+        return self.format.sample_type
+
+    def __getattr__(self, str name) -> Plugin:
         try:
-            obj = self.core.__getattr__(name)
+            obj = getattr(self.core, name)
             if isinstance(obj, Plugin):
                 (<Plugin>obj).injected_arg = self
             return obj
         except AttributeError:
-            err = True
-        if err:
-            raise AttributeError(f'There is no attribute or namespace named {name}. Did you mistype a plugin namespace or forget to install a plugin?')
+            raise AttributeError(
+                f"There is no attribute or namespace named {name}. "
+                "Did you mistype a plugin namespace or forget to install a plugin?"
+            ) from None
 
     cdef ensure_valid_frame_number(self, int n):
         if n < 0:
@@ -2183,12 +2287,12 @@ cdef class AudioNode(RawNode):
             WaveHeader whdr
             Wave64Header w64hdr
 
-            size_t bytes_per_output_sample = (self.bits_per_sample + 7) // 8
+            size_t bytes_per_output_sample = (self.format.bits_per_sample + 7) // 8
             # VapourSynth audio frames contain at most VS_AUDIO_FRAME_SAMPLES samples
-            size_t buffer_size = VS_AUDIO_FRAME_SAMPLES * self.num_channels * bytes_per_output_sample
+            size_t buffer_size = VS_AUDIO_FRAME_SAMPLES * self.format.num_channels * bytes_per_output_sample
 
             uint8_t *interleave_buffer = <uint8_t *>malloc(buffer_size)
-            const uint8_t **src_ptrs = <const uint8_t **>malloc(self.num_channels * sizeof(uint8_t *))
+            const uint8_t **src_ptrs = <const uint8_t **>malloc(self.format.num_channels * sizeof(uint8_t *))
 
             void (*pack_func)(const uint8_t *const *const, uint8_t *, size_t, size_t) noexcept nogil
 
@@ -2201,10 +2305,10 @@ cdef class AudioNode(RawNode):
         if w64:
             if not CreateWave64Header(
                 w64hdr,
-                self.sample_type == SampleType.FLOAT,
-                self.bits_per_sample,
+                self.format.sample_type == SampleType.FLOAT,
+                self.format.bits_per_sample,
                 self.sample_rate,
-                self.channel_layout,
+                self.format.channel_layout,
                 self.num_samples,
             ):
                 raise Error("Failed to create WAVE64 header")
@@ -2212,10 +2316,10 @@ cdef class AudioNode(RawNode):
         elif wav:
             if not CreateWaveHeader(
                 whdr,
-                self.sample_type == SampleType.FLOAT,
-                self.bits_per_sample,
+                self.format.sample_type == SampleType.FLOAT,
+                self.format.bits_per_sample,
                 self.sample_rate,
-                self.channel_layout,
+                self.format.channel_layout,
                 self.num_samples,
             ):
                 raise Error("Failed to create WAV header")
@@ -2237,7 +2341,7 @@ cdef class AudioNode(RawNode):
         else:
             free(src_ptrs)
             free(interleave_buffer)
-            raise Error(f"Unsupported bit depth for output: {self.bits_per_sample}")
+            raise Error(f"Unsupported bit depth for output: {self.format.bits_per_sample}")
 
         cdef:
             AudioFrame af
@@ -2251,7 +2355,7 @@ cdef class AudioNode(RawNode):
             for idx, frame in enumerate(self.frames(prefetch, backlog, close=True)):
                 af = <AudioFrame>frame
                 num_samples_in_frame = af.funcs.getFrameLength(af.constf)
-                required_size = <size_t>num_samples_in_frame * self.num_channels * bytes_per_output_sample
+                required_size = <size_t>num_samples_in_frame * self.format.num_channels * bytes_per_output_sample
 
                 if required_size > buffer_size:
                     new_buffer = <uint8_t *>realloc(interleave_buffer, required_size)
@@ -2263,10 +2367,10 @@ cdef class AudioNode(RawNode):
                     buffer_size = required_size
 
                 with nogil:
-                    for c in range(self.num_channels):
+                    for c in range(self.format.num_channels):
                         src_ptrs[c] = af.funcs.getReadPtr(af.constf, c)
 
-                    pack_func(src_ptrs, interleave_buffer, num_samples_in_frame, self.num_channels)
+                    pack_func(src_ptrs, interleave_buffer, num_samples_in_frame, self.format.num_channels)
 
                 write((<char *>interleave_buffer)[:required_size])
 
@@ -2284,10 +2388,6 @@ cdef class AudioNode(RawNode):
 
     def set_output(self, int index = 0):
         _get_output_dict("set_output")[index] = self
-
-    @property
-    def channels(self):
-        return ChannelLayout(self.channel_layout)
 
     def __add__(self, other):
         if not isinstance(self, AudioNode) or not isinstance(other, AudioNode):
@@ -2367,10 +2467,10 @@ cdef class AudioNode(RawNode):
 
     def __repr__(self):
         return _construct_repr(
-            self, sample_type=self.sample_type,
-            bits_per_sample=self.bits_per_sample,
-            bytes_per_sample=self.bytes_per_sample,
-            num_channels=self.num_channels,
+            self, sample_type=self.format.sample_type,
+            bits_per_sample=self.format.bits_per_sample,
+            bytes_per_sample=self.format.bytes_per_sample,
+            num_channels=self.format.num_channels,
             channels=iter(self.channels), sample_rate=self.sample_rate,
             num_samples=self.num_samples
 
@@ -2381,10 +2481,10 @@ cdef class AudioNode(RawNode):
 
         return (
             'AudioNode\n'
-            f'\tSample Type: {self.sample_type.name}\n'
-            f'\tBits Per Sample: {self.bits_per_sample:d}\n'
-            f'\tBytes Per Sample: {self.bytes_per_sample:d}\n'
-            f'\tNum Channels: {self.num_channels:d}\n'
+            f'\tSample Type: {self.format.sample_type.name}\n'
+            f'\tBits Per Sample: {self.format.bits_per_sample:d}\n'
+            f'\tBytes Per Sample: {self.format.bytes_per_sample:d}\n'
+            f'\tNum Channels: {self.format.num_channels:d}\n'
             f'\tChannels: {channels}\n'
             f'\tSample Rate: {self.sample_rate:d}\n'
             f'\tNum Samples: {self.num_samples:d}\n'
@@ -2396,14 +2496,10 @@ cdef AudioNode createAudioNode(VSNode *node, const VSAPI *funcs, Core core):
     instance.node = node
     instance.funcs = funcs
     instance.ai = funcs.getAudioInfo(node)
+    instance.format = createAudioFormat(&instance.ai.format, funcs, core.core)
     instance.sample_rate = instance.ai.sampleRate
     instance.num_samples = instance.ai.numSamples
     instance.num_frames = instance.ai.numFrames
-    instance.sample_type = SampleType(instance.ai.format.sampleType)
-    instance.bits_per_sample = instance.ai.format.bitsPerSample
-    instance.bytes_per_sample = instance.ai.format.bytesPerSample
-    instance.channel_layout = instance.ai.format.channelLayout
-    instance.num_channels = instance.ai.format.numChannels
     return instance
 
 cdef class LogHandle:
@@ -2554,6 +2650,12 @@ cdef class Core:
         if not self.funcs.queryVideoFormat(&fmt, color_family, sample_type, bits_per_sample, subsampling_w, subsampling_h, self.core):
             raise Error('Invalid format specified')
         return createVideoFormat(&fmt, self.funcs, self.core)
+
+    def query_audio_format(self, int sample_type, int bits_per_sample, uint64_t channel_layout):
+        cdef VSAudioFormat fmt
+        if not self.funcs.queryAudioFormat(&fmt, sample_type, bits_per_sample, channel_layout, self.core):
+            raise Error('Invalid format specified')
+        return createAudioFormat(&fmt, self.funcs, self.core)
 
     def get_video_format(self, uint32_t id):
         cdef VSVideoFormat fmt
