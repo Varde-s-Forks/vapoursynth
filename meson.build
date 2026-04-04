@@ -10,12 +10,10 @@ enable_guard_pattern = get_option('enable_guard_pattern')
 enable_x86_asm = get_option('enable_x86_asm')
 enable_core = get_option('enable_core')
 enable_vsscript = get_option('enable_vsscript')
-enable_vspipe = get_option('enable_vspipe')
 enable_python_module = get_option('enable_python_module')
 build_wheel = get_option('build_wheel')
 
 if not build_wheel
-    enable_vspipe = false
     enable_python_module = false
 endif
 
@@ -292,6 +290,16 @@ if enable_core
             subdir: 'vapoursynth',
         )
 
+        py.install_sources(
+            files(
+                'src/pybindings/vspipe/__init__.py',
+                'src/pybindings/vspipe/_cli.py',
+                'src/pybindings/vspipe/_utils.py',
+                'src/pybindings/vspipe/_vsenv.py',
+            ),
+            subdir: 'vapoursynth/vspipe',
+        )
+
         install_subdir(
             'include',
             exclude_directories: 'cython',
@@ -349,28 +357,6 @@ if enable_vsscript
         link_with: libvsscript,
     )
 
-    if enable_vspipe
-        link_args = []
-
-        if cxx.get_argument_syntax() == 'gcc' and is_win
-            link_args += '-municode'
-        elif cxx.get_argument_syntax() == 'msvc'
-            link_args += [
-                '/MANIFEST:EMBED',
-                '/MANIFESTINPUT:' + (meson.project_source_root() / 'src/vspipe/vspipe.manifest'),
-            ]
-        endif
-
-        executable('vspipe',
-            files('src/common/wave.cpp', 'src/vspipe/printgraph.cpp', 'src/vspipe/vsjson.cpp', 'src/vspipe/vspipe.cpp'),
-            dependencies: vsscript_dep,
-            gnu_symbol_visibility: 'hidden',
-            install: true,
-            install_dir: install_dir,
-            install_rpath: '$ORIGIN',
-            link_args: link_args,
-        )
-    endif
 
     if build_wheel and cxx.get_argument_syntax() == 'msvc'
         vsvfw = library('vsvfw',
@@ -382,6 +368,4 @@ if enable_vsscript
             vs_module_defs: 'src/vfw/vsvfw.def',
         )
     endif
-elif enable_vspipe
-    error('Cannot build vspipe when VSScript is disabled')
 endif

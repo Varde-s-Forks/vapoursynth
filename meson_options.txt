@@ -25,7 +25,8 @@ option('enable_vsscript',
 option('enable_vspipe',
     type: 'boolean',
     value: true,
-    description: 'Build vspipe. Requires VSScript',
+    description: 'Build vspipe (DEPRECATED: vspipe is now part of the Python module)',
+    deprecated: true
 )
 
 option('enable_python_module',

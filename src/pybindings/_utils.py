@@ -369,11 +369,6 @@ def register_legacy_install() -> None:
         },
         {
             "subkey": r"SOFTWARE\VapourSynth",
-            "value_name": "VSPipeEXE",
-            "value_data": PurePath(__file__).with_name("vspipe.exe"),
-        },
-        {
-            "subkey": r"SOFTWARE\VapourSynth",
             "value_name": "PythonPath",
             "value_data": PurePath(sys.executable).parent,
         },
@@ -474,11 +469,3 @@ def register_vfw() -> None:
         sys.exit(1)
     else:
         print("VFW provider successfully registered!")
-
-def vspipe() -> None:
-    import subprocess
-
-    vspipe_path = PurePath(__file__)
-    vspipe_path = vspipe_path.with_name("vspipe")
-    ret = subprocess.run([vspipe_path, *sys.argv[1:]])
-    sys.exit(ret.returncode)

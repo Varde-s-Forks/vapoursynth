@@ -2,10 +2,6 @@
 * This file is an example on how to use the VSScript part of the VapourSynth API.
 * It writes out all the frames of an input script to a file.
 * This file may be freely modified/copied/distributed.
-*
-* For an example of how to use getFrameAsync() see src/vspipe/vspipe.cpp
-* It's basically the same as this example but with a callback when the
-* processing is done.
 */
 
 #define VSSCRIPT_USE_LATEST_API
