@@ -231,7 +231,7 @@ cdef class Core:
     cdef VSCore *core
     cdef int creationFlags
     cdef const VSAPI *funcs
-    cdef readonly object timings
+    cdef readonly CoreTimings timings
     cdef object __weakref__
 cdef object createNode(VSNode *node, const VSAPI *funcs, Core core)
 cdef object createConstFrame(const VSFrame *f, const VSAPI *funcs, VSCore *core)

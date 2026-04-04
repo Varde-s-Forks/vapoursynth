@@ -24,9 +24,11 @@ from cpython.memoryview cimport PyMemoryView_FromMemory, PyMemoryView_FromObject
 from cpython.ref cimport Py_DECREF, Py_INCREF
 from libc.stdint cimport int64_t, uint8_t, uint32_t, uintptr_t
 from libc.stdlib cimport free, malloc, realloc
+from libcpp.string cimport string
+from printgraph cimport NodePrintMode, printNodeGraph, printNodeTimes
 from vapoursynth4 cimport *
-from vshelper4 cimport bitblt
 from vsconstants4 cimport *
+from vshelper4 cimport bitblt
 from vsscript_internal cimport VSScript
 from wave cimport (
     CreateWave64Header,
@@ -1732,6 +1734,18 @@ cdef class RawNode:
             for idx in range(self.funcs.getNumNodeDependencies(self.node))
         )
 
+    def get_graph(self, mode: str = "full", processing_time: float = 0.0):
+        if not self._inspectable():
+             raise Error("This node is not inspectable.")
+
+        return self.core.timings.get_graph(self, mode=mode, processing_time=processing_time)
+
+    def get_filter_time(self, processing_time: float):
+        if not self._inspectable():
+            raise Error("This node is not inspectable.")
+
+        return self.core.timings.get_filter_time(self, processing_time=processing_time)
+
     @property
     def _name(self):
         if not self._inspectable():
@@ -2409,6 +2423,27 @@ cdef class CoreTimings:
             f'\tEnabled: {self.enabled}\n'
             f'\tFreed Nodes Time: {self.freed_nodes}\n'
         )
+
+    def get_graph(self, RawNode node not None, mode: str = "full", double processing_time = 0.0):
+        cdef NodePrintMode pmode = NodePrintMode.Full
+        if mode == "simple":
+            pmode = NodePrintMode.Simple
+        elif mode == "times":
+            pmode = NodePrintMode.FullWithTimes
+
+        cdef string s
+        with nogil:
+             s = printNodeGraph(pmode, node.node, processing_time, node.funcs)
+
+        return s.decode("utf-8")
+
+    def get_filter_time(self, RawNode node not None, double processing_time):
+        cdef string s
+        cdef int64_t freed_time = self.freed_nodes
+        with nogil:
+            s = printNodeTimes(node.node, processing_time, freed_time, node.funcs)
+
+        return s.decode("utf-8")
 
 cdef CoreTimings createCoreTimings(Core core):
     cdef CoreTimings instance = CoreTimings.__new__(CoreTimings)
