@@ -30,6 +30,7 @@ from vapoursynth4 cimport *
 from vsconstants4 cimport *
 from vshelper4 cimport bitblt
 from vsscript_internal cimport VSScript
+from vsjson cimport convertVSMapToJSON
 from wave cimport (
     CreateWave64Header,
     CreateWaveHeader,
@@ -1074,6 +1075,11 @@ cdef class FrameProps:
     def copy(self):
         # We can't copy VideoFrames directly, so we're just gonna return a real dictionary.
         return dict(self)
+
+    def to_json(self):
+        self.frame._ensure_open()
+        cdef const VSMap *m = self.funcs.getFramePropertiesRO(self.frame.constf)
+        return convertVSMapToJSON(m, self.funcs).decode('utf-8')
 
     def __dir__(self):
         self.frame._ensure_open()

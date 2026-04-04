@@ -256,7 +256,7 @@ if enable_core
         py_ext_kwargs = {
             'cython_args': ['-I' + meson.project_source_root() / 'src/pybindings'],
             'dependencies': [py_dep, vapoursynth_dep],
-            'include_directories': include_directories('src/pybindings'),
+            'include_directories': [include_directories('src/pybindings'), include_directories('src/vsutils')],
             'install': true,
             'install_rpath': '$ORIGIN',
             'limited_api': '3.12',
@@ -265,7 +265,12 @@ if enable_core
         }
 
         py.extension_module('_main',
-            files('src/common/wave.cpp', 'src/pybindings/_main.pyx'),
+            files(
+                'src/common/wave.cpp',
+                'src/vsutils/printgraph.cpp',
+                'src/vsutils/vsjson.cpp',
+                'src/pybindings/_main.pyx'
+            ),
             kwargs: py_ext_kwargs,
         )
 
@@ -273,7 +278,6 @@ if enable_core
             files('src/pybindings/_constants.pyx'),
             kwargs: py_ext_kwargs,
         )
-
 
         py.install_sources(
             files(

@@ -366,6 +366,8 @@ class FrameProps(MutableMapping[str, _PropValue]):
     @overload
     def setdefault(self, key: str, default: _VSValue, /) -> _PropValue: ...  # pyright: ignore[reportIncompatibleMethodOverride]
     def copy(self) -> dict[str, _PropValue]: ...
+    def to_json(self) -> str: ...
+
     @overload  # type: ignore[override]
     def get(
         self,
