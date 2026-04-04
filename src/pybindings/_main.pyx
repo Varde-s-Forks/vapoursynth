@@ -1869,7 +1869,14 @@ cdef class VideoNode(RawNode):
 
         _get_output_dict("set_output")[index] = VideoOutputTuple(self, alpha, alt_output)
 
-    def output(self, object fileobj not None, bint y4m = False, object progress_update = None, int prefetch = 0, int backlog = -1):
+    def output(
+        self, object fileobj not None,
+        bint y4m = False,
+        object progress_update = None,
+        object frame_cb = None,
+        int prefetch = 0,
+        int backlog = -1,
+    ):
         if (fileobj is sys.stdout or fileobj is sys.stderr):
             # If you are embedded in a vsscript-application, don't allow outputting to stdout/stderr.
             # This is the responsibility of the application, which does know better where to output it.
@@ -1882,7 +1889,10 @@ cdef class VideoNode(RawNode):
         if progress_update is not None:
             if not callable(progress_update):
                 raise TypeError("progress_update must be a callable")
-            progress_update(0, len(self))
+            progress_update(0, self.num_frames)
+
+        if frame_cb is not None and not callable(frame_cb):
+            raise TypeError("frame_cb must be a callable")
 
         if y4m:
             if self.format.color_family == cfGray:
@@ -1912,11 +1922,12 @@ cdef class VideoNode(RawNode):
 
             data = (
                 f"YUV4MPEG2 C{y4mformat} W{self.width} H{self.height} F{self.fps_num}:{self.fps_den} "
-                "Ip A0:0 XLENGTH={len(self)}\n"
+                f"Ip A0:0 XLENGTH={self.num_frames}\n"
             )
             fileobj.write(data.encode("ascii"))
 
         write = fileobj.write
+        total = self.num_frames
 
         cdef:
             const VSAPI *lib = self.funcs
@@ -1978,8 +1989,11 @@ cdef class VideoNode(RawNode):
 
                     alpha.close()
 
+                if frame_cb:
+                    frame_cb(idx, frame)
+
                 if progress_update is not None:
-                    progress_update(idx + 1, len(self))
+                    progress_update(idx + 1, total)
         finally:
             free(buffer)
 
@@ -2143,7 +2157,16 @@ cdef class AudioNode(RawNode):
         else:
             return createConstAudioFrame(f, self.funcs, self.core.core)
 
-    def output(self, object fileobj not None, bint wav = False, bint w64 = False, object progress_update = None, int prefetch = 0, int backlog = -1):
+    def output(
+        self,
+        object fileobj not None,
+        bint wav = False,
+        bint w64 = False,
+        object progress_update = None,
+        object frame_cb = None,
+        int prefetch = 0,
+        int backlog = -1,
+    ):
         if (fileobj is sys.stdout or fileobj is sys.stderr):
             # If you are embedded in a vsscript-application, don't allow outputting to stdout/stderr.
             # This is the responsibility of the application, which does know better where to output it.
@@ -2171,6 +2194,9 @@ cdef class AudioNode(RawNode):
 
         if progress_update is not None:
                 progress_update(0, self.num_frames)
+
+        if frame_cb is not None and not callable(frame_cb):
+            raise TypeError("frame_cb must be a callable")
 
         if w64:
             if not CreateWave64Header(
@@ -2243,6 +2269,9 @@ cdef class AudioNode(RawNode):
                     pack_func(src_ptrs, interleave_buffer, num_samples_in_frame, self.num_channels)
 
                 write((<char *>interleave_buffer)[:required_size])
+
+                if frame_cb is not None:
+                    frame_cb(idx, frame)
 
                 if progress_update is not None:
                     progress_update(idx + 1, self.num_frames)

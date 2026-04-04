@@ -730,6 +730,7 @@ class VideoNode(RawNode):
         fileobj: IO[bytes],
         y4m: bool = False,
         progress_update: Callable[[_CurrentFrame, _TotalFrames], None] | None = None,
+        frame_cb: Callable[[int, VideoFrame], None] | None = None,
         prefetch: int = 0,
         backlog: int = -1,
     ) -> None: ...
@@ -773,6 +774,7 @@ class AudioNode(RawNode):
         wav: bool = False,
         w64: bool = False,
         progress_update: Callable[[_CurrentFrame, _TotalFrames], None] | None = None,
+        frame_cb: Callable[[int, AudioFrame], None] | None = None,
         prefetch: int = 0,
         backlog: int = -1,
     ) -> None: ...
