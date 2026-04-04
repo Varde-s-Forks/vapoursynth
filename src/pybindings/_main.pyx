@@ -846,7 +846,7 @@ cdef class VideoFormat:
 
 cdef VideoFormat createVideoFormat(const VSVideoFormat *f, const VSAPI *funcs, VSCore *core):
     cdef VideoFormat instance = VideoFormat.__new__(VideoFormat)
-    cdef char nameBuffer[32]
+    cdef char[32] nameBuffer
     if f.colorFamily != cfUndefined:
         funcs.getVideoFormatName(f, nameBuffer)
         instance.name = nameBuffer.decode('utf-8')
@@ -875,13 +875,15 @@ cdef class FrameProps:
 
     def __getitem__(self, str name):
         self.frame._ensure_open()
-        cdef const VSMap *m = self.funcs.getFramePropertiesRO(self.frame.constf)
-        cdef bytes b = name.encode('utf-8')
-        cdef list ol = []
-        cdef int numelem = self.funcs.mapNumElements(m, b)
-        cdef const int64_t *intArray
-        cdef const double *floatArray
-        cdef const char *data
+        cdef:
+            const VSMap *m = self.funcs.getFramePropertiesRO(self.frame.constf)
+            bytes b = name.encode('utf-8')
+            list ol = []
+            int numelem = self.funcs.mapNumElements(m, b)
+            const int64_t *intArray
+            const double *floatArray
+            const char *data
+
         if (name == '_ColorRange'):
             warnings.warn('The _ColorRange frame property has been deprecated, use _Range instead', DeprecationWarning)
         if numelem < 0:
@@ -1918,7 +1920,7 @@ cdef class VideoNode(RawNode):
             for idx, frame in enumerate(self.frames(prefetch, backlog, close=True)):
                 if y4m:
                     fileobj.write(b"FRAME\n")
-                
+
                 constf = (<VideoFrame>frame).constf
                 fi = lib.getVideoFrameFormat(constf)
                 for p in range(fi.numPlanes):
@@ -1926,7 +1928,7 @@ cdef class VideoNode(RawNode):
                     readPtr = lib.getReadPtr(constf, p)
                     rowSize = <size_t>lib.getFrameWidth(constf, p) * fi.bytesPerSample
                     height = lib.getFrameHeight(constf, p)
-                    
+
                     if stride == <ptrdiff_t>rowSize:
                         write(PyMemoryView_FromMemory(<char *>readPtr, rowSize * height, PyBUF_READ))
                     else:
@@ -1946,7 +1948,7 @@ cdef class VideoNode(RawNode):
                         readPtr = lib.getReadPtr(constf, p)
                         rowSize = <size_t>lib.getFrameWidth(constf, p) * fi.bytesPerSample
                         height = lib.getFrameHeight(constf, p)
-                        
+
                         if stride == <ptrdiff_t>rowSize:
                             write(PyMemoryView_FromMemory(<char *>readPtr, rowSize * height, PyBUF_READ))
                         else:
@@ -2106,7 +2108,7 @@ cdef class AudioNode(RawNode):
             raise ValueError('Requesting frame number is beyond the last frame')
 
     def get_frame(self, int n):
-        cdef char errorMsg[4096]
+        cdef char[4096] errorMsg
         cdef char *ep = errorMsg
         cdef const VSFrame *f
         self.ensure_valid_frame_number(n)
