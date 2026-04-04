@@ -1,11 +1,49 @@
 from ._constants import *
 from ._constants import __api_version__, __version__
-from ._main import *
 from ._main import (
+    LOG_LEVEL_MAP,
+    AudioFrame,
+    AudioNode,
+    ChannelLayout,
+    Core,
+    CoreTimings,
+    Environment,
+    EnvironmentData,
+    EnvironmentPolicy,
+    EnvironmentPolicyAPI,
+    Error,
+    FrameProps,
+    FramePtr,
+    Func,
+    FuncData,
+    Function,
+    Local,
+    LogHandle,
+    Plugin,
+    PluginVersion,
+    PythonVSScriptLoggingBridge,
+    RawFrame,
+    RawNode,
+    StandaloneEnvironmentPolicy,
+    VideoFormat,
+    VideoFrame,
+    VideoNode,
+    VideoOutputTuple,
+    VSScriptEnvironmentPolicy,
     __pyx_capi__,  # pyright: ignore[reportAttributeAccessIssue]
     _CoreProxy,
     _FastManager,
     _try_enable_introspection,
+    clear_output,
+    clear_outputs,
+    core,
+    get_current_environment,
+    get_output,
+    get_outputs,
+    has_policy,
+    register_on_destroy,
+    register_policy,
+    unregister_on_destroy,
 )
 from ._signatures import *
 from ._utils import *
@@ -79,7 +117,6 @@ __all__ = [
     "core",
     "register_install",
     "register_vfw",
-    "vspipe",
     "vapoursynth_check_env",
     "vapoursynth_config",
 ]
