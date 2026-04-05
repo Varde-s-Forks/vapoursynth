@@ -67,6 +67,24 @@ Here are a few users of the VSScript library:
 .. note::
    If libvsscript is loaded with dlopen(), the RTLD_GLOBAL flag must be used. If not, Python won't be able to import binary modules. This is due to Python's design.
 
+Python Discovery
+----------------
+
+When ``vsscript`` initializes, it must locate a Python interpreter and its corresponding shared library (DLL/SO/DYLIB).
+It uses the following discovery order:
+
+1.  **Environment Variable Overrides:**
+
+    * If **VAPOURSYNTH_PYTHON_EXE** and **VAPOURSYNTH_PYTHON** are both set, they are used directly.
+    * If **VAPOURSYNTH_PYTHONHOME** or **PYTHONHOME** is set, it searches for a versioned Python library
+      (e.g., ``python314.dll`` or ``libpython3.14.so``) within that path.
+
+2.  **Configuration File:** It checks for a mapping in the ``vapoursynth.toml`` file located
+    in the user's application data directory.
+
+3.  **Automatic Configuration:** As a last resort, it attempts to run ``vapoursynth config`` to automatically detect
+    the current environment's Python and save it to the configuration file.
+
 
 Structs
 #######

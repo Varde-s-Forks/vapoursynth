@@ -97,6 +97,59 @@ static std::pair<std::string, size_t> getTOMLString(const std::string &line, siz
     return std::make_pair(unescapeTOMLString(s), end + 1);
 }
 
+static std::pair<std::filesystem::path, std::filesystem::path> readEnvVars() {
+#ifdef VS_TARGET_OS_WINDOWS
+    const wchar_t *vexe = _wgetenv(L"VAPOURSYNTH_PYTHON_EXE");
+    const wchar_t *vlib = _wgetenv(L"VAPOURSYNTH_PYTHON");
+    if (vexe && vlib)
+        return { vexe, vlib };
+
+    const wchar_t *vh = _wgetenv(L"VAPOURSYNTH_PYTHONHOME");
+    if (!vh) vh = _wgetenv(L"PYTHONHOME");
+
+    if (vh) {
+        std::filesystem::path home(vh);
+        std::filesystem::path exe = home / L"python.exe";
+
+        if (std::filesystem::exists(exe)) {
+            for (int i = 20; i >= 12; --i) {
+                std::filesystem::path dll = home / (L"python3" + std::to_wstring(i) + L".dll");
+                if (std::filesystem::exists(dll))
+                    return { exe, dll };
+            }
+        }
+    }
+#else
+    const char *vexe = std::getenv("VAPOURSYNTH_PYTHON_EXE");
+    const char *vlib = std::getenv("VAPOURSYNTH_PYTHON");
+    if (vexe && vlib)
+        return { vexe, vlib };
+
+    const char *vh = std::getenv("VAPOURSYNTH_PYTHONHOME");
+    if (!vh) vh = std::getenv("PYTHONHOME");
+
+    if (vh) {
+        std::filesystem::path home(vh);
+        std::filesystem::path exe = home / "bin" / "python3";
+
+        if (std::filesystem::exists(exe)) {
+            std::filesystem::path libdir = home / "lib";
+#ifdef __APPLE__
+            const std::string ext = ".dylib";
+#else
+            const std::string ext = ".so";
+#endif
+            for (int i = 20; i >= 12; --i) {
+                std::filesystem::path lib = libdir / ("libpython3." + std::to_string(i) + ext);
+                if (std::filesystem::exists(lib))
+                    return { exe, lib };
+            }
+        }
+    }
+#endif
+    return {};
+}
+
 static std::pair<std::filesystem::path, std::filesystem::path> readEnvConfig(const std::filesystem::path &vsscriptPath) {
 #ifdef VS_TARGET_OS_WINDOWS
     std::filesystem::path configPath = _wgetenv(L"APPDATA");
@@ -135,7 +188,10 @@ static void realInit() VS_NOEXCEPT {
 
     std::string vsscriptPath = getLibraryPath().u8string();
 
-    auto [pythonExePath, pythonSymbolPath] = readEnvConfig(vsscriptPath);
+    auto [pythonExePath, pythonSymbolPath] = readEnvVars();
+
+    if (pythonExePath.empty() || pythonSymbolPath.empty())
+        std::tie(pythonExePath, pythonSymbolPath) = readEnvConfig(vsscriptPath);
 
     if (pythonExePath.empty() || pythonSymbolPath.empty()) {
 #ifdef VS_TARGET_OS_WINDOWS
