@@ -59,11 +59,11 @@ static bool isValidIdentifier(const std::string &s) {
 }
 
 #ifdef VS_TARGET_OS_WINDOWS
-const char *VSCore::libraryExtension = ".dll";
+const std::filesystem::path VSCore::libraryExtension = std::filesystem::u8path(".dll");
 #elif defined(VS_TARGET_OS_DARWIN)
-const char *VSCore::libraryExtension = ".dylib";
+const std::filesystem::path VSCore::libraryExtension = std::filesystem::u8path(".dylib");
 #else
-const char *VSCore::libraryExtension = ".so";
+const std::filesystem::path VSCore::libraryExtension = std::filesystem::u8path(".so");
 #endif
 
 VSFrameContext::VSFrameContext(NodeOutputKey key, const PVSFrameContext &notify) :
@@ -999,17 +999,9 @@ PVSFrame VSNode::getFrameInternal(int n, int activationReason, VSFrameContext *f
     if (enableFilterTiming)
         startTime = std::chrono::high_resolution_clock::now();
 
-#ifdef VS_DEBUG_FRAME_REQUESTS
-    core->logMessage(mtInformation, "Started processing of frame: " + std::to_string(n) + " ar: " + std::to_string(activationReason) + " filter: " + this->name + " (" + std::to_string(reinterpret_cast<uintptr_t>(this)) + ")");
-#endif
-
     core->currentProcessingNode = this;
     const VSFrame *r = (apiMajor == VAPOURSYNTH_API_MAJOR) ? filterGetFrame(n, activationReason, instanceData, frameCtx->frameContext, frameCtx, core, &vs_internal_vsapi) : reinterpret_cast<vs3::VSFilterGetFrame>(filterGetFrame)(n, activationReason, &instanceData, frameCtx->frameContext, frameCtx, core, &vs_internal_vsapi3);
     core->currentProcessingNode = nullptr;
-
-#ifdef VS_DEBUG_FRAME_REQUESTS
-    core->logMessage(mtInformation, "Finished processing of frame: " + std::to_string(n) + " ar: " + std::to_string(activationReason) + " filter: " + this->name + " (" + std::to_string(reinterpret_cast<uintptr_t>(this)) + ")");
-#endif
 
     if (enableFilterTiming) {
         std::chrono::nanoseconds duration = std::chrono::high_resolution_clock::now() - startTime;
@@ -1716,27 +1708,46 @@ bool VSCore::loadPluginManifest(const std::filesystem::path &path) {
     std::filesystem::path manifestPath = path;
     manifestPath /= "manifest.vs";
 
-    std::ifstream f(manifestPath);
-    if (!f.is_open())
+#ifdef VS_TARGET_OS_WINDOWS
+    FILE *f = _wfopen(manifestPath.c_str(), L"rb");
+#else
+    FILE *f = fopen(manifestPath.c_str(), "rb");
+#endif
+
+    if (!f)
         return false;
 
-    std::string line;
+    std::string contents;
+    contents.resize(10000);
+    size_t numRead = fread(contents.data(), 1, contents.size(), f);
+    contents.resize(numRead);
 
-    if (!std::getline(f, line)) {
+    if (contents.empty()) {
         logMessage(mtCritical, ("Couldn't read contents of manifest file: " + manifestPath.u8string()).c_str());
         return true;
     }
 
-    if (line != "[VapourSynth Manifest V1]") {
+    std::vector<std::string> lines;
+
+    size_t lastPos = contents.find_first_not_of("\r\n", 0);
+    size_t pos = contents.find_first_of("\r\n", lastPos + 1);
+    while (pos != std::string::npos) {
+        lines.push_back(contents.substr(lastPos, pos - lastPos));
+        lastPos = contents.find_first_not_of("\r\n", pos + 1);
+        pos = contents.find_first_of("\r\n", lastPos);
+    }
+    lines.push_back(contents.substr(lastPos));
+
+    if (lines.empty() || lines[0] != "[VapourSynth Manifest V1]") {
         logMessage(mtCritical, ("Invalid header in manifest: " + manifestPath.u8string()).c_str());
         return true;
     }
 
-    while (std::getline(f, line)) {
-        if (line.empty())
+    for (size_t i = 1; i < lines.size(); ++i) {
+        if (lines[i].empty())
             continue;
         std::filesystem::path pluginPath = path;
-        pluginPath /= line;
+        pluginPath /= std::filesystem::u8path(lines[i]);
         pluginPath += libraryExtension;
         try {
             loadPlugin(pluginPath, true);
@@ -1750,11 +1761,11 @@ bool VSCore::loadPluginManifest(const std::filesystem::path &path) {
     return true;
 }
 
-bool VSCore::loadAllPluginsInPath(const std::filesystem::path &path) {
+bool VSCore::loadAllPluginsInPath(const std::filesystem::path &path, bool pluginRoot) {
     if (path.empty())
         return false;
 
-    if (!loadPluginManifest(path)) {
+    if (pluginRoot || !loadPluginManifest(path)) {
         try {
             for (const auto &iter : std::filesystem::directory_iterator(path)) {
                 std::error_code ec;
@@ -1855,7 +1866,7 @@ int64_t VSCore::getFreedNodeProcessingTime(bool reset) noexcept {
 std::filesystem::path VSCore::getLibraryPath() {
 #ifdef VS_TARGET_OS_WINDOWS
     HMODULE module;
-    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)&vs_internal_vsapi, &module);
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&vs_internal_vsapi, &module);
     std::vector<wchar_t> pathBuf(65536);
     GetModuleFileNameW(module, pathBuf.data(), (DWORD)pathBuf.size());
     return pathBuf.data();
@@ -1921,11 +1932,19 @@ VSCore::VSCore(int flags) :
 
     // New site-packages relative plugin loading
     if (!disableAutoLoading) {
-        loadAllPluginsInPath(libraryPath / L"plugins");
+#ifdef VS_TARGET_OS_WINDOWS
+        loadAllPluginsInPath(libraryPath / L"plugins", true);
+
+        const wchar_t *extraPluginPath = _wgetenv(L"VAPOURSYNTH_EXTRA_PLUGIN_PATH");
+        if (extraPluginPath && wcslen(extraPluginPath) > 0)
+            loadAllPluginsInPath(extraPluginPath, true);
+#else
+        loadAllPluginsInPath(libraryPath / "plugins", true);
 
         const char *extraPluginPath = std::getenv("VAPOURSYNTH_EXTRA_PLUGIN_PATH");
         if (extraPluginPath && strlen(extraPluginPath) > 0)
-            loadAllPluginsInPath(extraPluginPath);
+            loadAllPluginsInPath(extraPluginPath, true);
+#endif
     }
 }
 
@@ -2092,7 +2111,14 @@ VSPlugin::VSPlugin(const std::filesystem::path &relFilename, const std::string &
         int abiLevel = doGetX86ABILevel();
 
         auto tryABILevel = [&fullPath](int level) -> bool {
-            std::filesystem::path abiLevelPath = std::filesystem::path(fullPath).replace_extension(".v" + std::to_string(level) + fullPath.extension().u8string());
+            std::filesystem::path newExtension;
+            if (level == 3)
+                newExtension = std::filesystem::u8path(".zn4");
+            else if (level == 2)
+                newExtension = std::filesystem::u8path(".avx2");
+            newExtension += fullPath.extension();
+
+            std::filesystem::path abiLevelPath = std::filesystem::path(fullPath).replace_extension(newExtension);
             if (std::filesystem::exists(abiLevelPath)) {
                 fullPath = abiLevelPath;
                 return true;
@@ -2130,6 +2156,9 @@ VSPlugin::VSPlugin(const std::filesystem::path &relFilename, const std::string &
 
     if (!pluginInit3)
         pluginInit3 = reinterpret_cast<vs3::VSInitPlugin>(GetProcAddress(libHandle, "_VapourSynthPluginInit@12"));
+
+    if (pluginInit3)
+        core->logMessage(mtWarning, "Plugin " + relFilename.u8string() + " is using API3 which is deprecated and will be removed shortly.");
 
     if (!pluginInit && !pluginInit3) {
         if (!core->disableLibraryUnloading)
@@ -2295,25 +2324,14 @@ void VSPlugin::getFunctions3(VSMap *out) const {
 VSNode::VSCache::CacheAction VSNode::VSCache::recommendSize() {
     int total = hits + nearMiss + farMiss;
 
-    if (total == 0) {
-#ifdef VS_CACHE_DEBUG
-        fprintf(stderr, "Cache (%p) stats (clear): total: %d, far miss: %d, near miss: %d, hits: %d, size: %d\n", (void *)this, total, farMiss, nearMiss, hits, maxSize);
-#endif
+    if (total == 0)
         return CacheAction::Clear;
-    }
 
-    if (total < 30) {
-#ifdef VS_CACHE_DEBUG
-        fprintf(stderr, "Cache (%p) stats (keep low total): total: %d, far miss: %d, near miss: %d, hits: %d, size: %d\n", (void *)this, total, farMiss, nearMiss, hits, maxSize);
-#endif
+    if (total < 30)
         return CacheAction::NoChange; // not enough requests to know what to do so keep it this way
-    }
 
     bool shrink = (nearMiss == 0 && hits == 0); // shrink if there were no hits or even close to hitting
     bool grow = ((nearMiss * 20) >= total); // grow if 5% or more are near misses
-#ifdef VS_CACHE_DEBUG
-    fprintf(stderr, "Cache (%p) stats (%s): total: %d, far miss: %d, near miss: %d, hits: %d, size: %d\n", (void *)this, shrink ? "shrink" : (grow ? "grow" : "keep"), total, farMiss, nearMiss, hits, maxSize);
-#endif
 
     if (grow) { // growing the cache would be beneficial
         clearStats();

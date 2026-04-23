@@ -3,7 +3,7 @@ project('VapourSynth', 'c', 'cpp',
     license: 'LGPL-2.1-or-later',
     license_files: 'COPYING.LESSER',
     meson_version: '>=1.3.0',
-    version: '74',
+    version: '75rc1',
 )
 
 enable_guard_pattern = get_option('enable_guard_pattern')
@@ -14,6 +14,7 @@ enable_python_module = get_option('enable_python_module')
 build_wheel = get_option('build_wheel')
 
 if not build_wheel
+    enable_vsscript = false
     enable_python_module = false
 endif
 
@@ -53,26 +54,21 @@ py_dep = py.dependency(version: is_win ? '>=3.14' : '>=3.12')  # Py_NO_LINK_LIB 
 install_dir = build_wheel ? py.get_install_dir() / 'vapoursynth' : []
 
 vs_current_release = run_command(
-    find_program('python', 'python3'),
+    py,
     '-c',
     'print(open("VAPOURSYNTH_VERSION").read())',
     check: true,
 ).stdout().strip().split()[2].split('-')[0]
 
 if get_option('buildtype') == 'release'
-    if cxx.get_id() == 'msvc'
-        add_project_arguments('/GL', language: lang)
-    elif cxx.get_id() == 'clang-cl'
-        add_project_arguments('/clang:-flto', language: lang)
-    endif
-
-    if cxx.get_linker_id() == 'link'
-        add_project_link_arguments('/LTCG', language: lang)
+    if cxx.get_id() == 'clang-cl'
+        add_project_arguments('/clang:-flto', '/clang:-O3', language: lang)
     endif
 endif
 
 add_project_arguments(
     cxx.get_supported_arguments(
+        '-D_CRT_SECURE_NO_WARNINGS',
         '-DNOMINMAX',
         '-DVS_CURRENT_RELEASE=@0@'.format(vs_current_release),
         '-DVS_GRAPH_API',
@@ -324,15 +320,6 @@ elif enable_python_module
 endif
 
 if enable_vsscript
-    soversion = is_win ? '' : run_command(
-        'grep',
-        '-m',
-        '1',
-        'VSSCRIPT_API_MAJOR',
-        'include/VSScript4.h',
-        check: true,
-    ).stdout().strip().split()[2]
-
     libvsscript = library('vsscript',
         files('src/vsscript/vsscript.cpp'),
         cpp_args: ['-DPy_NO_LINK_LIB', '-DVS_CORE_EXPORTS'],
@@ -341,16 +328,7 @@ if enable_vsscript
         include_directories: incdir,
         install: true,
         install_dir: install_dir,
-        soversion: soversion,
     )
-
-    if not build_wheel
-        pkg.generate(libvsscript,
-            description: 'Library for interfacing VapourSynth with Python',
-            filebase: 'vsscript',
-            subdirs: 'vapoursynth',
-        )
-    endif
 
     vsscript_dep = declare_dependency(
         include_directories: incdir,
