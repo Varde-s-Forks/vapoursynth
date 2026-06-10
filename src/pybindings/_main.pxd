@@ -27,9 +27,15 @@ cdef class EnvironmentData:
     cdef list on_destroy
     cdef dict outputs
     cdef object __weakref__
+    cdef dict active_exceptions
+    cdef int next_exc_id
+    cdef object exc_lock
+    cdef int store_exception(self, object e)
+    cdef object retrieve_exception(self, str msg_str)
 
 cdef class EnvironmentPolicy:
     pass
+
 cdef class StandaloneEnvironmentPolicy(EnvironmentPolicy):
     cdef EnvironmentPolicyAPI _api
     cdef EnvironmentData _environment

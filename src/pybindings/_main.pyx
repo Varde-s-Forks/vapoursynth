@@ -226,7 +226,7 @@ cdef class EnvironmentPolicyAPI:
         env.outputs = {}
         env.active_exceptions = {}
         env.next_exc_id = 0
-        env.exc_lock = Lock()
+        env.exc_lock = threading.Lock()
         env.coreCreationFlags = flags
         env.on_destroy = []
         env.env_locals = weakref.WeakKeyDictionary()
@@ -3179,8 +3179,7 @@ class PythonVSScriptLoggingBridge(logging.Handler):
         core.log_message(mt, message)
 
 
-
-@final
+@cython.final
 cdef class VSScriptEnvironmentPolicy:
     cdef dict _env_map
 
