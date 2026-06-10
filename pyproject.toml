@@ -40,10 +40,10 @@ Changelog = "https://github.com/vapoursynth/vapoursynth/blob/master/ChangeLog"
 
 [project.scripts]
 vapoursynth = "vapoursynth._cli:main"
-vspipe = "vapoursynth:vspipe"
+vspipe = "vapoursynth.vspipe:main"
 
 [dependency-groups]
-dev = ["build", { include-group = "doc" }]
+dev = ["build", "cython>=3.1.0", { include-group = "doc" }]
 doc = ["sphinx", "sphinx-intl", "sphinx-rtd-theme"]
 
 [tool.meson-python]
@@ -54,7 +54,6 @@ exclude = [
     "*.lib",
     "*/avscompat.pdb",
     "*/vapoursynth.pdb",
-    "*/vspipe.pdb",
     "*/vsvfw.pdb",
 ]
 

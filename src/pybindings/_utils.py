@@ -4,12 +4,13 @@ import sys
 import tomllib
 from ctypes.util import find_library
 from pathlib import Path, PurePath
+from typing import Any
 
 from ._shell import update_shell
-from .vapoursynth import Error, __version__
+from ._constants import __version__
 
 
-def get_include():
+def get_include() -> str:
     """Return the directory that contains the VapourSynth header files."""
     return str(PurePath(__file__).with_name("include"))
 
@@ -19,25 +20,27 @@ def get_pkgconfig_dir():
     return str(PurePath(__file__).with_name("pkgconfig"))
 
 
-def get_plugin_dir():
+def get_plugin_dir() -> str:
     """Return the VapourSynth plugin directory location."""
     return str(PurePath(__file__).with_name("plugins"))
 
 
-def get_vsscript():
+def get_vsscript() -> str:
     """Return the location of the vsscript library."""
-    if sys.platform == "win32":
-        return str(PurePath(__file__).with_name("vsscript.dll"))
-    elif sys.platform == "darwin":
-        return str(PurePath(__file__).with_name("libvsscript.dylib"))
-    else:
-        return str(PurePath(__file__).with_name("libvsscript.so"))
+    match sys.platform:
+        case "win32":
+            path = PurePath(__file__).with_name("vsscript.dll")
+        case "darwin":
+            path = PurePath(__file__).with_name("libvsscript.dylib")
+        case _:
+            path = PurePath(__file__).with_name("libvsscript.so")
+    return str(path)
 
 
 # All code for scripts executables
 
 
-def _version_string_to_number(version_string):
+def _version_string_to_number(version_string: str) -> int:
     version_parts = version_string.strip().split(".", 4)
     while len(version_parts) < 4:
         version_parts.append("0")
@@ -49,7 +52,7 @@ def _version_string_to_number(version_string):
     )
 
 
-def _is_msi_product_installed(upgrade_code, min_version):
+def _is_msi_product_installed(upgrade_code: str, min_version: str) -> bool:
     from ctypes.wintypes import DWORD, LPCWSTR, LPDWORD, LPWSTR, UINT
 
     msi = ctypes.WinDLL("msi.dll")
@@ -64,7 +67,7 @@ def _is_msi_product_installed(upgrade_code, min_version):
     if MsiEnumRelatedProductsW(upgrade_code, 0, 0, product_code_buf) != 0:
         return False
 
-    version_string_size = ctypes.wintypes.DWORD(16)
+    version_string_size = DWORD(16)
     version_string_buf = ctypes.create_unicode_buffer(version_string_size.value)
 
     err_code = MsiGetProductInfoW(
@@ -84,16 +87,15 @@ def _is_msi_product_installed(upgrade_code, min_version):
     return _version_string_to_number(version_string_buf.value) >= _version_string_to_number(min_version)
 
 
-def _check_visual_studio_runtime():
-    if sys.platform == "win32":
-        if not _is_msi_product_installed("{36F68A90-239C-34DF-B58C-64B30153CE35}", "14.50.35719.0"):
-            print("The Visual Studio 2015-2026 runtime which is required to run VapourSynth is missing or too old!")
-            print("The latest version can be downloaded from:")
-            print("    x64: https://aka.ms/vc14/vc_redist.x64.exe")
-            print("  arm64: https://aka.ms/vc14/vc_redist.arm64.exe")
+def _check_visual_studio_runtime() -> None:
+    if sys.platform == "win32" and not _is_msi_product_installed("{36F68A90-239C-34DF-B58C-64B30153CE35}", "14.50.35719.0"):
+        print("The Visual Studio 2015-2026 runtime which is required to run VapourSynth is missing or too old!")
+        print("The latest version can be downloaded from:")
+        print("    x64: https://aka.ms/vc14/vc_redist.x64.exe")
+        print("  arm64: https://aka.ms/vc14/vc_redist.arm64.exe")
 
 
-def _find_python_symbol_path():
+def _find_python_symbol_path() -> str | Path | None:
     if sys.platform == "win32":
         from ctypes.wintypes import DWORD, HMODULE, LPWSTR, MAX_PATH
 
@@ -169,57 +171,67 @@ def _find_python_symbol_path():
         return None
 
 
-def _check_windows_env():
-    if sys.platform == "win32":
-        import winreg
+def _check_windows_env() -> None:
+    if sys.platform != "win32":
+        return
 
-        vapoursynth_path = None
+    import winreg
 
+    vapoursynth_path = None
+
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"SOFTWARE\VapourSynth", 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY
+        )
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER, r"SOFTWARE\VapourSynth", 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY
-            )
-            try:
-                vapoursynth_path = winreg.QueryValueEx(key, "Path")[0]
-            finally:
-                winreg.CloseKey(key)
-        except Exception:
-            pass
+            vapoursynth_path = winreg.QueryValueEx(key, "Path")[0]
+        finally:
+            winreg.CloseKey(key)
+    except Exception:
+        pass
 
-        if vapoursynth_path and PurePath(__file__).parent.full_match(vapoursynth_path):
-            print("Registry entries: this installation")
-        elif vapoursynth_path:
-            print(f'Registry entries: (other installation) "{vapoursynth_path}"')
-        else:
-            print("Registry entries: not set")
+    if vapoursynth_path and PurePath(__file__).parent.full_match(vapoursynth_path):
+        print("Registry entries: this installation")
+    elif vapoursynth_path:
+        print(f'Registry entries: (other installation) "{vapoursynth_path}"')
+    else:
+        print("Registry entries: not set")
 
-        vfw_path = None
+    vfw_path = None
 
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"SOFTWARE\Classes\CLSID\{58F74CA0-BD0E-4664-A49B-8D10E6F0C131}\InProcServer32",
+            0,
+            winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
+        )
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"SOFTWARE\Classes\CLSID\{58F74CA0-BD0E-4664-A49B-8D10E6F0C131}\InProcServer32",
-                0,
-                winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
-            )
-            try:
-                vfw_path = winreg.QueryValueEx(key, None)[0]
-            finally:
-                winreg.CloseKey(key)
-        except Exception:
-            pass
+            vfw_path = winreg.QueryValueEx(key, None)[0]
+        finally:
+            winreg.CloseKey(key)
+    except Exception:
+        pass
 
-        if vfw_path and PurePath(__file__).with_name("vsvfw.dll").full_match(vfw_path):
-            print("VFW module: this installation")
-        elif vfw_path:
-            print(f'VFW module: (other installation) "{vfw_path}"')
-        else:
-            print("VFW module: not set")
+    if vfw_path and PurePath(__file__).with_name("vsvfw.dll").full_match(vfw_path):
+        print("VFW module: this installation")
+    elif vfw_path:
+        print(f'VFW module: (other installation) "{vfw_path}"')
+    else:
+        print("VFW module: not set")
 
 
-def _get_vapoursynth_config_path():
+def _get_vapoursynth_config_path() -> Path:
     if sys.platform == "win32":
-        config_path = Path(os.getenv("APPDATA")) / "vapoursynth"
+        import ctypes
+        from ctypes import wintypes
+
+        CSIDL_APPDATA = 26
+
+        buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+        ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_APPDATA, None, 0, buf)
+
+        config_path = Path(buf.value) / "vapoursynth"
     else:
         config_home = os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config"
         config_path = Path(config_home) / "vapoursynth"
@@ -227,7 +239,7 @@ def _get_vapoursynth_config_path():
     return config_path / "vapoursynth.toml"
 
 
-def _has_implicit_config():
+def _has_implicit_config() -> bool:
     if sys.platform == "win32":
         direct_python_exe_path = Path(__file__).parent.parent.parent.parent
         direct_python_dll_path = direct_python_exe_path / "python3.dll"
@@ -280,11 +292,11 @@ def vapoursynth_check_env():
     _check_windows_env()
 
 
-def _escape_toml_string(s):
+def _escape_toml_string(s: str) -> str:
     return '"' + str(s).replace("\\", "\\\\") + '"'
 
 
-def vapoursynth_config():
+def vapoursynth_config() -> None:
     _check_visual_studio_runtime()
 
     if _has_implicit_config():
@@ -319,7 +331,7 @@ def vapoursynth_config():
         print(f"Failed to write configuration to {config_path}")
 
 
-def _write_registry_entries(entries):
+def _write_registry_entries(entries: list[dict[str, Any]]) -> bool:
     import winreg
 
     for entry in entries:
@@ -343,9 +355,9 @@ def _write_registry_entries(entries):
     return True
 
 
-def register_legacy_install():
+def register_legacy_install() -> None:
     if sys.platform != "win32":
-        raise Error("Command is only supported on Windows!")
+        raise OSError("Command is only supported on Windows!")
 
     entries = [
         {
@@ -375,11 +387,6 @@ def register_legacy_install():
         },
         {
             "subkey": r"SOFTWARE\VapourSynth",
-            "value_name": "VSPipeEXE",
-            "value_data": PurePath(__file__).with_name("vspipe.exe"),
-        },
-        {
-            "subkey": r"SOFTWARE\VapourSynth",
             "value_name": "PythonPath",
             "value_data": PurePath(sys.executable).parent,
         },
@@ -392,7 +399,7 @@ def register_legacy_install():
         print("Successfully wrote legacy installation information to registry!")
 
 
-def register_install():
+def register_install() -> None:
     if sys.platform == "win32":
         entries = [
             {
@@ -419,9 +426,9 @@ def register_install():
         update_shell(get_vsscript())
 
 
-def register_vfw():
+def register_vfw() -> None:
     if sys.platform != "win32":
-        raise Error("Command is only supported on Windows!")
+        raise OSError("Command is only supported on Windows!")
 
     entries = [
         # CLSID for VapourSynth VFW
@@ -480,14 +487,3 @@ def register_vfw():
         sys.exit(1)
     else:
         print("VFW provider successfully registered!")
-
-
-def vspipe():
-    import subprocess
-
-    vspipe_path = PurePath(__file__)
-    vspipe_path = vspipe_path.with_name("vspipe")
-    try:
-        sys.exit(subprocess.run([vspipe_path, *sys.argv[1:]]).returncode)
-    except KeyboardInterrupt:
-        sys.exit(0)

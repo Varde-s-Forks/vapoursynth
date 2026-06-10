@@ -56,8 +56,6 @@ At this time, VapourSynth scripts can be written only in Python (version 3).
 
 Here are a few users of the VSScript library:
 
-   * `vspipe <https://github.com/vapoursynth/vapoursynth/blob/master/src/vspipe/vspipe.cpp>`_
-
    * `vsvfw <https://github.com/vapoursynth/vapoursynth/blob/master/src/vfw/vsvfw.cpp>`_
 
    * `an example program <https://github.com/vapoursynth/vapoursynth/blob/master/sdk/vsscript_example.c>`_

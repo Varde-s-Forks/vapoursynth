@@ -15,225 +15,79 @@
 #  You should have received a copy of the GNU Lesser General Public
 #  License along with VapourSynth; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+#
 """ This is the VapourSynth module implementing the Python bindings. """
 
-cimport vapoursynth
-include 'vsconstants.pxd'
+cimport cython
+from cpython.buffer cimport PyBUF_READ, PyBUF_SIMPLE, PyBuffer_FillInfo, PyBuffer_Release
+from cpython.memoryview cimport PyMemoryView_FromMemory, PyMemoryView_FromObject
+from cpython.ref cimport Py_DECREF, Py_INCREF
+from libc.stdint cimport int64_t, uint8_t, uint32_t, uintptr_t
+from libc.stdlib cimport free, malloc, realloc
+from libcpp.string cimport string
+from printgraph cimport NodePrintMode, printNodeGraph, printNodeTimes
+from vapoursynth4 cimport *
+from vsconstants4 cimport *
+from vshelper4 cimport bitblt
 from vsscript_internal cimport VSScript
-from wave cimport WaveHeader, Wave64Header, CreateWave64Header, CreateWaveHeader, PackChannels16to16le, PackChannels32to24le, PackChannels32to32le
-cimport cython.parallel
-from cython cimport view, final
-from libc.stdlib cimport malloc, free, realloc
-from libc.stdint cimport intptr_t, int16_t, uint16_t, int32_t, uint32_t, uint8_t, uint64_t, int64_t
-from cpython.buffer cimport PyBUF_SIMPLE
-from cpython.buffer cimport PyBuffer_FillInfo
-from cpython.buffer cimport PyBuffer_Release
-from cpython.memoryview cimport PyMemoryView_FromObject
-from cpython.number cimport PyIndex_Check
-from cpython.number cimport PyNumber_Index
-from cpython.ref cimport Py_INCREF, Py_DECREF
-import os
-import enum
-import ctypes
-import threading
-import traceback
-import gc
-import sys
-import inspect
-import weakref
+from vsjson cimport convertVSMapToJSON
+from wave cimport (
+    CreateWave64Header,
+    CreateWaveHeader,
+    PackChannels16to16le,
+    PackChannels32to24le,
+    PackChannels32to32le,
+    Wave64Header,
+    WaveHeader,
+)
+
 import atexit
 import contextlib
+import ctypes
+import enum
+import gc
+import inspect
 import logging
-import functools
+import os
+import sys
+import threading
+import traceback
 import typing
 import warnings
-import keyword
-from threading import local as ThreadLocal, Lock, RLock
-from types import MappingProxyType
-from collections.abc import ItemsView, Iterable, KeysView, MutableMapping, ValuesView
+import weakref
+from collections.abc import ItemsView, KeysView, MutableMapping, ValuesView
 from concurrent.futures import Future, CancelledError as FutureCancelledError
 from fractions import Fraction
+from types import MappingProxyType
+
+from ._constants import (
+    AudioChannels,
+    ColorFamily,
+    FilterMode,
+    MessageType,
+    Range,
+    SampleType,
+    VapourSynthAPIVersion,
+    VapourSynthVersion,
+    __api_version__,
+    __version__,
+)
+from ._signatures import _construct_repr, construct_signature
 
 
-class MediaType(IntEnum):
-    VIDEO = mtVideo
-    AUDIO = mtAudio
-
-class ColorFamily(IntEnum):
-    UNDEFINED = cfUndefined
-    GRAY = cfGray
-    RGB = cfRGB
-    YUV = cfYUV
-
-class SampleType(IntEnum):
-    INTEGER = stInteger
-    FLOAT = stFloat
-
-class PresetVideoFormat(IntEnum):
-    NONE = pfNone
-
-    GRAY8 = pfGray8
-    GRAY9 = pfGray9
-    GRAY10 = pfGray10
-    GRAY12 = pfGray12
-    GRAY14 = pfGray14
-    GRAY16 = pfGray16
-    GRAY32 = pfGray32
-
-    GRAYH = pfGrayH
-    GRAYS = pfGrayS
-
-    YUV410P8 = pfYUV410P8
-    YUV411P8 = pfYUV411P8
-    YUV440P8 = pfYUV440P8
-
-    YUV420P8 = pfYUV420P8
-    YUV422P8 = pfYUV422P8
-    YUV444P8 = pfYUV444P8
-
-    YUV420P9 = pfYUV420P9
-    YUV422P9 = pfYUV422P9
-    YUV444P9 = pfYUV444P9
-
-    YUV420P10 = pfYUV420P10
-    YUV422P10 = pfYUV422P10
-    YUV444P10 = pfYUV444P10
-
-    YUV420P12 = pfYUV420P12
-    YUV422P12 = pfYUV422P12
-    YUV444P12 = pfYUV444P12
-
-    YUV420P14 = pfYUV420P14
-    YUV422P14 = pfYUV422P14
-    YUV444P14 = pfYUV444P14
-
-    YUV420P16 = pfYUV420P16
-    YUV422P16 = pfYUV422P16
-    YUV444P16 = pfYUV444P16
-
-    YUV420PH = pfYUV420PH
-    YUV420PS = pfYUV420PS
-
-    YUV422PH = pfYUV422PH
-    YUV422PS = pfYUV422PS
-
-    YUV444PH = pfYUV444PH
-    YUV444PS = pfYUV444PS
-
-    RGB24 = pfRGB24
-    RGB27 = pfRGB27
-    RGB30 = pfRGB30
-    RGB36 = pfRGB36
-    RGB42 = pfRGB42
-    RGB48 = pfRGB48
-
-    RGBH = pfRGBH
-    RGBS = pfRGBS
-
-class FilterMode(IntEnum):
-    PARALLEL = fmParallel
-    PARALLEL_REQUESTS = fmParallelRequests
-    UNORDERED = fmUnordered
-    FRAME_STATE = fmFrameState
-
-class AudioChannels(IntEnum):
-    FRONT_LEFT = acFrontLeft
-    FRONT_RIGHT = acFrontRight
-    FRONT_CENTER = acFrontCenter
-    LOW_FREQUENCY = acLowFrequency
-    BACK_LEFT = acBackLeft
-    BACK_RIGHT = acBackRight
-    FRONT_LEFT_OF_CENTER = acFrontLeftOFCenter
-    FRONT_RIGHT_OF_CENTER = acFrontRightOFCenter
-    BACK_CENTER = acBackCenter
-    SIDE_LEFT = acSideLeft
-    SIDE_RIGHT = acSideRight
-    TOP_CENTER = acTopCenter
-    TOP_FRONT_LEFT = acTopFrontLeft
-    TOP_FRONT_CENTER = acTopFrontCenter
-    TOP_FRONT_RIGHT = acTopFrontRight
-    TOP_BACK_LEFT = acTopBackLeft
-    TOP_BACK_CENTER = acTopBackCenter
-    TOP_BACK_RIGHT = acTopBackRight
-    STEREO_LEFT = acStereoLeft
-    STEREO_RIGHT = acStereoRight
-    WIDE_LEFT = acWideLeft
-    WIDE_RIGHT = acWideRight
-    SURROUND_DIRECT_LEFT = acSurroundDirectLeft
-    SURROUND_DIRECT_RIGHT = acSurroundDirectRight
-    LOW_FREQUENCY2 = acLowFrequency2
-
-class MessageType(IntFlag):
-    MESSAGE_TYPE_DEBUG = mtDebug
-    MESSAGE_TYPE_INFORMATION = mtInformation
-    MESSAGE_TYPE_WARNING = mtWarning
-    MESSAGE_TYPE_CRITICAL = mtCritical
-    MESSAGE_TYPE_FATAL = mtFatal
-
-class CoreCreationFlags(IntFlag):
-    ENABLE_GRAPH_INSPECTION = ccfEnableGraphInspection
-    DISABLE_AUTO_LOADING = ccfDisableAutoLoading
-    DISABLE_LIBRARY_UNLOADING = ccfDisableLibraryUnloading
-    ENABLE_FRAME_REF_DEBUG = ccfEnableFrameRefDebug
-
-# Alias for deprecated type name, remove this in 2030 or so
-ColorRange = Range
-
-# In this file
-globals().update(MediaType.__members__)
-globals().update(ColorFamily.__members__)
-globals().update(SampleType.__members__)
-globals().update(PresetVideoFormat.__members__)
-globals().update(FilterMode.__members__)
-globals().update(AudioChannels.__members__)
-globals().update(MessageType.__members__)
-globals().update(CoreCreationFlags.__members__)
-
-# From vsconstants.pxd
-globals().update(Range.__members__)
-globals().update(ChromaLocation.__members__)
-globals().update(FieldBased.__members__)
-globals().update(MatrixCoefficients.__members__)
-globals().update(TransferCharacteristics.__members__)
-globals().update(ColorPrimaries.__members__)
-
-class VapourSynthVersion(typing.NamedTuple):
-    release_major: int
-    release_minor: int
-
-    def __str__(self):
-        if self.release_minor:
-            return f'R{self.release_major}.{self.release_minor}'
-        return f'R{self.release_major}'
-
-class VapourSynthAPIVersion(typing.NamedTuple):
-    api_major: int
-    api_minor: int
-
-    def __str__(self):
-        return f'R{self.api_major}.{self.api_minor}'
+# Log level mapping from VapourSynth to Python logging
+cdef dict _LOG_LEVEL_MAP = {
+    MessageType.MESSAGE_TYPE_DEBUG: logging.DEBUG,
+    MessageType.MESSAGE_TYPE_INFORMATION: logging.INFO,
+    MessageType.MESSAGE_TYPE_WARNING: logging.WARNING,
+    MessageType.MESSAGE_TYPE_CRITICAL: logging.ERROR,
+    MessageType.MESSAGE_TYPE_FATAL: logging.CRITICAL
+}
+LOG_LEVEL_MAP = MappingProxyType(_LOG_LEVEL_MAP)
 
 
-__version__ = VapourSynthVersion(VS_CURRENT_RELEASE, 0)
-__api_version__ = VapourSynthAPIVersion(VAPOURSYNTH_API_MAJOR, VAPOURSYNTH_API_MINOR)
-
-@final
-cdef class EnvironmentData(object):
-    cdef bint alive
-    cdef Core core
-    cdef object on_destroy
-    cdef dict outputs
-    cdef dict active_exceptions
-    cdef int next_exc_id
-    cdef object exc_lock
-
-    cdef int coreCreationFlags
-    cdef VSLogHandle* log
-
-    cdef object env_locals
-
-    cdef object __weakref__
-
+@cython.final
+cdef class EnvironmentData:
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -272,9 +126,9 @@ cdef class EnvironmentData(object):
         return None
 
 
-class EnvironmentPolicy(object):
 
-    def on_policy_registered(self, special_api):
+cdef class EnvironmentPolicy:
+    def on_policy_registered(self, EnvironmentPolicyAPI special_api):
         pass
 
     def on_policy_cleared(self):
@@ -283,41 +137,26 @@ class EnvironmentPolicy(object):
     def get_current_environment(self):
         raise NotImplementedError
 
-    def set_environment(self, environment):
+    def set_environment(self, EnvironmentData environment):
         raise NotImplementedError
 
-    def is_alive(self, environment):
-        cdef EnvironmentData env = <EnvironmentData>environment
-        return env.alive
+    def is_alive(self, EnvironmentData environment):
+        return environment.alive
 
 
-@final
-cdef class StandaloneEnvironmentPolicy:
-    cdef EnvironmentData _environment
-    cdef object _api
-    cdef object _logger
-    cdef int _flags
-
-    cdef object __weakref__
-
+@cython.final
+cdef class StandaloneEnvironmentPolicy(EnvironmentPolicy):
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
     def _on_log_message(self, level, msg):
-        levelmap = {
-            MessageType.MESSAGE_TYPE_DEBUG: logging.DEBUG,
-            MessageType.MESSAGE_TYPE_INFORMATION: logging.INFO,
-            MessageType.MESSAGE_TYPE_WARNING: logging.WARN,
-            MessageType.MESSAGE_TYPE_CRITICAL: logging.ERROR,
-            MessageType.MESSAGE_TYPE_FATAL: logging.FATAL
-        }
-        self._logger.log(levelmap[level], msg)
+        self._logger.log(_LOG_LEVEL_MAP[level], msg)
 
-    def on_policy_registered(self, api):
-        self._api = api
+    def on_policy_registered(self, EnvironmentPolicyAPI special_api):
+        self._api = special_api
         self._logger = logging.getLogger("vapoursynth")
-        self._environment = api.create_environment(self._flags)
-        api.set_logger(self._environment, self._on_log_message)
+        self._environment = special_api.create_environment(self._flags)
+        special_api.set_logger(self._environment, self._on_log_message)
 
     def on_policy_cleared(self):
         self._api.destroy_environment(self._environment)
@@ -327,10 +166,10 @@ cdef class StandaloneEnvironmentPolicy:
     def get_current_environment(self):
         return self._environment
 
-    def set_environment(self, environment):
+    def set_environment(self, EnvironmentData environment):
         return self._environment
 
-    def is_alive(self, environment):
+    def is_alive(self, EnvironmentData environment):
         return environment is self._environment
 
 
@@ -354,27 +193,17 @@ cdef void _unset_logger(EnvironmentData env):
     env.log = NULL
 
 
-cdef void __stdcall _logCb(int msgType, const char *msg, void *userData) noexcept nogil:
+cdef void _logCb(int msgType, const char *msg, void *userData) noexcept nogil:
     with gil:
         message = msg.decode("utf-8")
         (<object>userData)(msgType, message)
 
-cdef void __stdcall _logFree(void* userData) noexcept nogil:
+cdef void _logFree(void* userData) noexcept nogil:
     with gil:
         Py_DECREF(<object>userData)
 
-@final
+@cython.final
 cdef class EnvironmentPolicyAPI:
-    # This must be a weak-ref to prevent a cyclic dependency that happens if the API
-    # is stored within an EnvironmentPolicy-instance.
-    cdef object _target_policy
-
-    cdef object _lock
-    cdef object _known_environments
-    # Sadly, weakref has no WeakSet.
-    # So we use a counter to fake a WeakSet.
-    cdef int _known_environments_counter
-
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -392,25 +221,23 @@ cdef class EnvironmentPolicyAPI:
         self.ensure_policy_matches()
 
         cdef EnvironmentData env = EnvironmentData.__new__(EnvironmentData)
-        env.core = None
+        env.core = <Core>None
         env.log = NULL
         env.outputs = {}
         env.active_exceptions = {}
         env.next_exc_id = 0
-        env.exc_lock = Lock()
+        env.exc_lock = threading.Lock()
         env.coreCreationFlags = flags
         env.on_destroy = []
         env.env_locals = weakref.WeakKeyDictionary()
-        env.alive = True
+        env.alive = <bint>True
 
         with self._lock:
-            counter = self._known_environments_counter
-            self._known_environments_counter += 1
-            self._known_environments[counter] = env
+            self._known_environments.add(env)
 
         return env
 
-    def set_logger(self, env, logger):
+    def set_logger(self, EnvironmentData env, object logger):
         Py_INCREF(logger)
         _set_logger(env, _logCb, _logFree, <void *>logger)
 
@@ -450,7 +277,7 @@ cdef class EnvironmentPolicyAPI:
 
     def unregister_policy(self):
         self.ensure_policy_matches()
-        for environment in self._known_environments.values():
+        for environment in self._known_environments:
             self.destroy_environment(environment)
         clear_policy(delay=False)
 
@@ -473,7 +300,7 @@ def register_policy(policy):
     # Expose Additional API-calls to the newly registered Environment-policy.
     cdef EnvironmentPolicyAPI _api = EnvironmentPolicyAPI.__new__(EnvironmentPolicyAPI)
     _api._target_policy = weakref.ref(_policy)
-    _api._known_environments = weakref.WeakValueDictionary()
+    _api._known_environments = weakref.WeakSet()
     _api._lock = threading.Lock()
     _policy.on_policy_registered(_api)
 
@@ -494,7 +321,7 @@ def _try_enable_introspection(version=None):
 
 
 ## DO NOT EXPOSE THIS FUNCTION TO PYTHON-LAND!
-cdef get_policy():
+cdef EnvironmentPolicy get_policy():
     global _policy
     cdef StandaloneEnvironmentPolicy standalone_policy
 
@@ -508,7 +335,7 @@ cdef get_policy():
 def has_policy():
     return _policy is not None
 
-cdef clear_policy(delay=False):
+cdef clear_policy(bint delay=False):
     global _policy
     old_policy = _policy
 
@@ -546,11 +373,8 @@ def unregister_on_destroy(callback):
     env.on_destroy.remove(callback)
 
 
-@final
-cdef class _FastManager(object):
-    cdef EnvironmentData target
-    cdef EnvironmentData previous
-
+@cython.final
+cdef class _FastManager:
     def __init__(self):
         raise RuntimeError("Cannot directly instantiate this class.")
 
@@ -569,9 +393,7 @@ cdef class _FastManager(object):
         self.previous = None
 
 
-cdef class Environment(object):
-    cdef readonly object env
-
+cdef class Environment:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -587,7 +409,7 @@ cdef class Environment(object):
         return self.is_single()
 
     @classmethod
-    def is_single(self):
+    def is_single(cls):
         return not has_policy() or isinstance(_policy, StandaloneEnvironmentPolicy)
 
     @property
@@ -632,8 +454,6 @@ cdef class Environment(object):
 
 
 cdef class Local:
-    cdef object __weakref__
-
     def __getattr__(self, key):
         cdef EnvironmentData env = get_policy().get_current_environment()
         values = env.env_locals.setdefault(self, {})
@@ -677,132 +497,6 @@ class VideoOutputTuple(typing.NamedTuple):
     alt_output: typing.Literal[0, 1, 2]
 
 
-def _construct_type(signature):
-    type,*opt = signature.split(":")
-
-    # Handle Arrays.
-    if type.endswith("[]"):
-        array = True
-        type = type[:-2]
-    else:
-        array = False
-
-    # Handle types
-    if type == "vnode":
-        type = vapoursynth.VideoNode
-    elif type == "anode":
-        type = vapoursynth.AudioNode
-    elif type == "vframe":
-        type = vapoursynth.VideoFrame
-    elif type == "aframe":
-        type = vapoursynth.AudioFrame
-    elif type == "func":
-        type = typing.Union[vapoursynth.Func, typing.Callable]
-    elif type == "int":
-        type = int
-    elif type == "float":
-        type = float
-    elif type == "data":
-        type = typing.Union[str, bytes, bytearray]
-    else:
-        type = typing.Any
-
-    # Make the type a sequence.
-    if array:
-        type = typing.Union[type, typing.Sequence[type]]
-
-    # Mark an optional type
-    if opt:
-        type = typing.Optional[type]
-
-    return type
-
-def _construct_parameter(signature):
-    if signature == "any":
-        return inspect.Parameter(
-            "kwargs", inspect.Parameter.VAR_KEYWORD,
-            annotation=typing.Any
-        )
-
-    name, signature = signature.split(":", 1)
-
-    if keyword.iskeyword(name):
-        name += "_"
-
-    type = _construct_type(signature)
-
-    __,*opt = signature.split(":")
-    if opt:
-        default_value = None
-    else:
-        default_value = inspect.Parameter.empty
-
-    return inspect.Parameter(
-        name, inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        default=default_value, annotation=type
-    )
-
-def construct_signature(signature, return_signature, injected=None, name=None):
-    if isinstance(signature, vapoursynth.Function):
-        signature = signature.signature
-
-    params = list(
-        _construct_parameter(param)
-        for param in signature.split(";")
-        if param
-    )
-
-    if injected and params:
-        del params[0]
-
-    return_annotations = list(
-        _construct_parameter(rparam)
-        for rparam in return_signature.split(";")
-        if rparam
-    )
-
-    if not return_annotations:
-        return_annotation = None
-    elif len(return_annotations) == 1:
-        return_annotation = return_annotations.pop().annotation
-    else:
-        ret_dict_name = f'_ReturnDict_{name}' if name else '_ReturnDict'
-        return_annotation = typing.TypedDict(
-            ret_dict_name, {ret_ann.name: ret_ann.annotation for ret_ann in return_annotations}, total=True
-        )
-        return_annotation.__module__ = Exception.__module__
-
-
-    return inspect.Signature(tuple(params), return_annotation=return_annotation)
-
-def _construct_repr_wrap(value):
-    if isinstance(value, (enum.Enum, VideoFormat)):
-        return value.name
-
-    if isinstance(value, typing.Iterator):
-        value = ', '.join(_construct_repr_wrap(v) for v in value)
-
-    to_wrap = isinstance(value, str) and not value.startswith('<') and ' ' in value
-
-    if to_wrap:
-        return f'"{value}"'
-
-    return value
-
-def _construct_repr(obj, **kwargs):
-    address = f'{id(obj):X}'.rjust(16, "0")
-
-    add_data = ''
-
-    if kwargs:
-        add_data += ', '.join(
-            f'{key}={_construct_repr_wrap(value)}'
-            for key, value in kwargs.items()
-        )
-        add_data = f' {add_data}'
-
-    return f'<{obj.__class__.__module__}.{obj.__class__.__qualname__} object at 0x{address}{add_data}>'
-
 class Error(Exception):
     def __init__(self, value):
         self.value = value
@@ -813,7 +507,7 @@ class Error(Exception):
     def __repr__(self):
         return repr(self.value)
 
-cdef _get_output_dict(funcname="this function"):
+cdef _get_output_dict(str funcname):
     cdef EnvironmentData env = _env_current()
     if env is None:
         raise Error('Internal environment id not set. %s called from a filter callback?'%funcname)
@@ -837,11 +531,7 @@ def get_outputs():
 def get_output(int index = 0):
     return _get_output_dict("get_output")[index]
 
-cdef class FuncData(object):
-    cdef object func
-    cdef VSCore *core
-    cdef EnvironmentData env
-
+cdef class FuncData:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -855,10 +545,7 @@ cdef FuncData createFuncData(object func, VSCore *core, EnvironmentData env):
     instance.env = env
     return instance
 
-cdef class Func(object):
-    cdef const VSAPI *funcs
-    cdef VSFunction *ref
-
+cdef class Func:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -908,14 +595,7 @@ cdef Func createFuncRef(VSFunction *ref, const VSAPI *funcs):
     return instance
 
 
-cdef class CallbackData(object):
-    cdef const VSAPI *funcs
-    cdef object callback
-
-    cdef RawNode node
-
-    cdef EnvironmentData env
-
+cdef class CallbackData:
     def __init__(self, object node, EnvironmentData env, object callback):
         # Keeps the node alive during the call.
         self.node = node
@@ -930,10 +610,7 @@ cdef createCallbackData(const VSAPI* funcs, RawNode node, object cb):
     return cbd
 
 
-cdef class FramePtr(object):
-    cdef const VSFrame *f
-    cdef const VSAPI *funcs
-
+cdef class FramePtr:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -948,7 +625,7 @@ cdef FramePtr createFramePtr(const VSFrame *f, const VSAPI *funcs):
     return instance
 
 
-cdef void __stdcall frameDoneCallback(void *data, const VSFrame *f, int n, VSNode *node, const char *errormsg) noexcept nogil:
+cdef void frameDoneCallback(void *data, const VSFrame *f, int n, VSNode *node, const char *errormsg) noexcept nogil:
     with gil:
         result = error = None
         d = <CallbackData>data
@@ -1147,17 +824,7 @@ cdef void typedDictToMap(dict ndict, dict atypes, VSMap *inm, VSCore *core, cons
             else:
                 raise Error('argument ' + key + ' has an unknown type: ' + atypes[key])
 
-cdef class VideoFormat(object):
-    cdef readonly uint32_t id
-    cdef readonly str name
-    cdef readonly object color_family
-    cdef readonly object sample_type
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly int subsampling_w
-    cdef readonly int subsampling_h
-    cdef readonly int num_planes
-
+cdef class VideoFormat:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1189,7 +856,9 @@ cdef class VideoFormat(object):
 
     def __repr__(self):
         return _construct_repr(
-            self, id=self.id, name=self.name,
+            self,
+            id=self.id,
+            name=self.name,
             color_family=self.color_family,
             sample_type=self.sample_type,
             bits_per_sample=self.bits_per_sample,
@@ -1215,7 +884,7 @@ cdef class VideoFormat(object):
 
 cdef VideoFormat createVideoFormat(const VSVideoFormat *f, const VSAPI *funcs, VSCore *core):
     cdef VideoFormat instance = VideoFormat.__new__(VideoFormat)
-    cdef char nameBuffer[32]
+    cdef char[32] nameBuffer
     if f.colorFamily != cfUndefined:
         funcs.getVideoFormatName(f, nameBuffer)
         instance.name = nameBuffer.decode('utf-8')
@@ -1231,12 +900,87 @@ cdef VideoFormat createVideoFormat(const VSVideoFormat *f, const VSAPI *funcs, V
     instance.id = funcs.queryVideoFormatID(instance.color_family, instance.sample_type, instance.bits_per_sample, instance.subsampling_w, instance.subsampling_h, core)
     return instance
 
-cdef class FrameProps(object):
-    cdef RawFrame frame
-    cdef VSCore *core
-    cdef const VSAPI *funcs
-    cdef bint readonly
 
+class ChannelLayout(int):
+    def __contains__(self, int layout):
+        return bool(self & (1 << layout))
+
+    def __iter__(self):
+        for v in AudioChannels:
+            if ((1 << v) & self):
+                yield v
+
+    def __len__(self):
+        return self.bit_count()
+
+    def __repr__(self):
+        return _construct_repr(self, num_channels=len(self), layout=iter(self))
+
+    def __str__(self):
+        layout = ', '.join(c.name for c in self)
+
+        return (
+            'ChannelLayout\n'
+            f'\tNum channels: {len(self):d}\n'
+            f'\tLayout: {layout}\n'
+        )
+
+
+cdef class AudioFormat:
+    def __init__(self):
+        raise Error('Class cannot be instantiated directly')
+
+    @property
+    def channel_layout(self):
+        return ChannelLayout(self.channelLayout)
+
+    def _as_dict(self):
+        return {
+            'bits_per_sample': self.bits_per_sample,
+            'channel_layout': self.channel_layout,
+            'sample_type': self.sample_type,
+        }
+
+    def replace(self, **kwargs):
+        core = kwargs.pop("core", None) or _get_core()
+        vals = self._as_dict()
+        vals.update(**kwargs)
+        return core.query_audio_format(**vals)
+
+    def __repr__(self):
+        return _construct_repr(
+            self,
+            name=self.name,
+            sample_type=self.sample_type,
+            bits_per_sample=self.bits_per_sample,
+            bytes_per_sample=self.bytes_per_sample,
+        )
+
+    def __str__(self):
+        return (
+            'AudioFormat\n'
+            f'\tName: {self.name}\n'
+            f'\tSample Type: {self.sample_type.name}\n'
+            f'\tBits Per Sample: {self.bits_per_sample:d}\n'
+            f'\tBytes Per Sample: {self.bytes_per_sample:d}\n'
+            f'\tNum Channels: {self.num_channels:d}\n'
+        ) + str(self.channel_layout)
+
+
+cdef AudioFormat createAudioFormat(const VSAudioFormat *f, const VSAPI *funcs, VSCore *core):
+    cdef AudioFormat instance = AudioFormat.__new__(AudioFormat)
+    cdef char[32] nameBuffer
+    funcs.getAudioFormatName(f, nameBuffer)
+    instance.name = nameBuffer.decode('utf-8')
+    instance.sample_type = SampleType(f.sampleType)
+    instance.bits_per_sample = f.bitsPerSample
+    instance.bytes_per_sample = f.bytesPerSample
+    instance.num_channels = f.numChannels
+    instance.channelLayout = f.channelLayout
+    return instance
+
+
+cdef class FrameProps:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1249,13 +993,15 @@ cdef class FrameProps(object):
 
     def __getitem__(self, str name):
         self.frame._ensure_open()
-        cdef const VSMap *m = self.funcs.getFramePropertiesRO(self.frame.constf)
-        cdef bytes b = name.encode('utf-8')
-        cdef list ol = []
-        cdef int numelem = self.funcs.mapNumElements(m, b)
-        cdef const int64_t *intArray
-        cdef const double *floatArray
-        cdef const char *data
+        cdef:
+            const VSMap *m = self.funcs.getFramePropertiesRO(self.frame.constf)
+            bytes b = name.encode('utf-8')
+            list ol = []
+            int numelem = self.funcs.mapNumElements(m, b)
+            const int64_t *intArray
+            const double *floatArray
+            const char *data
+
         if (name == '_ColorRange'):
             warnings.warn('The _ColorRange frame property has been deprecated, use _Range instead', DeprecationWarning)
         if numelem < 0:
@@ -1445,6 +1191,11 @@ cdef class FrameProps(object):
         # We can't copy VideoFrames directly, so we're just gonna return a real dictionary.
         return dict(self)
 
+    def to_json(self):
+        self.frame._ensure_open()
+        cdef const VSMap *m = self.funcs.getFramePropertiesRO(self.frame.constf)
+        return convertVSMapToJSON(m, self.funcs).decode('utf-8')
+
     def __dir__(self):
         self.frame._ensure_open()
         return super(FrameProps, self).__dir__() + list(self.keys())
@@ -1467,42 +1218,7 @@ cdef FrameProps createFrameProps(RawFrame f):
     return instance
 
 
-
-class ChannelLayout(int):
-    def __contains__(self, layout):
-        return bool(self & (1 << layout))
-
-    def __iter__(self):
-        for v in AudioChannels:
-            if ((1 << v) & self):
-                yield v
-
-    def __len__(self):
-        return self.bit_count()
-
-    def __repr__(self):
-        return _construct_repr(
-            self, num_channels=len(self), layout=iter(self)
-        )
-
-    def __str__(self):
-        layout = ', '.join([c.name for c in self])
-
-        return (
-            'ChannelLayout\n'
-            f'\tNum channels: {len(self):d}\n'
-            f'\tLayout: {layout}\n'
-        )
-
-cdef class RawFrame(object):
-    cdef const VSFrame *constf
-    cdef VSFrame *f
-    cdef VSCore *core
-    cdef const VSAPI *funcs
-    cdef unsigned flags
-
-    cdef object __weakref__
-
+cdef class RawFrame:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1529,7 +1245,7 @@ cdef class RawFrame(object):
             self.funcs.freeFrame(self.constf)
         self.constf = NULL
 
-    def __getitem__(self, index):
+    def __getitem__(self, int index):
         raise NotImplementedError
 
     def __len__(self):
@@ -1581,10 +1297,6 @@ cdef class RawFrame(object):
 
 
 cdef class VideoFrame(RawFrame):
-    cdef readonly VideoFormat format
-    cdef readonly int width
-    cdef readonly int height
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1613,13 +1325,8 @@ cdef class VideoFrame(RawFrame):
                     _video.filllineinfo(&view.base, frame, plane, row, &self.flags, lib)
                     yield PyMemoryView_FromObject(view)
 
-    def __getitem__(self, index):
+    def __getitem__(self, int index):
         self._ensure_open()
-        if PyIndex_Check(index):
-            index = PyNumber_Index(index)
-        else:
-            raise TypeError("frame indices must be integers, not %s"
-                            % (type(index).__name__,))
 
         lib = self.funcs
         frame = <VSFrame*> self.constf
@@ -1691,34 +1398,25 @@ cdef VideoFrame createVideoFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
     return instance
 
 
-@cython.final
-@cython.internal
-cdef class _frame:
+cdef void* _frame_getdata(VSFrame* frame, int index, unsigned* flags, const VSAPI* lib) noexcept nogil:
+    cdef:
+        unsigned mask
 
-    @staticmethod
-    cdef void* getdata(VSFrame* frame, int index, unsigned* flags, const VSAPI* lib) noexcept nogil:
-        cdef:
-            unsigned mask
-
-        if lib.getFrameType(frame) == mtVideo:
-            mask = 1 << index+1
-        else:
-            mask = ~1  # there's only one plane in audio frames
-        if flags[0] & mask:  # trigger copy-on-write
-            flags[0] &= ~mask  # only do so once, see GH-724
-            return <void*> lib.getWritePtr(frame, index)
-        else:
-            return <void*> lib.getReadPtr(frame, index)
+    if lib.getFrameType(frame) == mtVideo:
+        mask = 1 << index+1
+    else:
+        mask = ~1  # there's only one plane in audio frames
+    if flags[0] & mask:  # trigger copy-on-write
+        flags[0] &= ~mask  # only do so once, see GH-724
+        return <void*> lib.getWritePtr(frame, index)
+    else:
+        return <void*> lib.getReadPtr(frame, index)
 
 
 @cython.final
 @cython.internal
 @cython.freelist(16)
 cdef class _2dview:
-    cdef:
-        Py_buffer base
-        ssize_t smalltable[4]  # shape, strides
-
     def __cinit__(self):
         # need Py_buffer.obj to be non-NULL
         PyBuffer_FillInfo(&self.base, None, NULL, 0, True, PyBUF_SIMPLE)
@@ -1750,11 +1448,9 @@ cdef class _2dview:
 @cython.final
 @cython.internal
 cdef class _video:
-
     @staticmethod
     cdef _2dview allocinfo(const VSVideoFormat* format):
-        cdef:
-            _2dview self
+        cdef _2dview self
 
         self = _2dview.__new__(_2dview)
         self.base.itemsize = format.bytesPerSample
@@ -1781,7 +1477,7 @@ cdef class _video:
         view.shape[0] = lib.getFrameHeight(frame, plane)
         view.strides[0] = lib.getStride(frame, plane)
         view.len = view.shape[0] * view.shape[1] * view.itemsize
-        view.buf = _frame.getdata(frame, plane, flags, lib)
+        view.buf = _frame_getdata(frame, plane, flags, lib)
 
     @staticmethod
     cdef void filllineinfo(Py_buffer* view, VSFrame* frame, int plane, int line, unsigned* flags, const VSAPI* lib) nogil:
@@ -1789,15 +1485,9 @@ cdef class _video:
         view.shape[0] = 1
         view.strides[0] = lib.getStride(frame, plane)
         view.len = view.shape[0] * view.shape[1] * view.itemsize
-        view.buf = <void *>(<uint8_t *>_frame.getdata(frame, plane, flags, lib) + lib.getStride(frame, plane) * line)
+        view.buf = <void *>(<uint8_t *>_frame_getdata(frame, plane, flags, lib) + lib.getStride(frame, plane) * line)
 
 cdef class AudioFrame(RawFrame):
-    cdef readonly object sample_type
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly int64_t channel_layout
-    cdef readonly int num_channels
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -1807,32 +1497,53 @@ cdef class AudioFrame(RawFrame):
 
     @property
     def channels(self):
-        return ChannelLayout(self.channel_layout)
+        warnings.warn("channels is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
 
-    def __getitem__(self, index):
+    @property
+    def channel_layout(self):
+        warnings.warn("channel_layout is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
+
+    @property
+    def bits_per_sample(self):
+        warnings.warn("bits_per_sample is deprecated, use '.format.bits_per_sample' instead", DeprecationWarning)
+        return self.format.bits_per_sample
+
+    @property
+    def bytes_per_sample(self):
+        warnings.warn("bytes_per_sample is deprecated, use '.format.bytes_per_sample' instead", DeprecationWarning)
+        return self.format.bytes_per_sample
+
+    @property
+    def num_channels(self):
+        warnings.warn("num_channels is deprecated, use '.format.num_channels' instead", DeprecationWarning)
+        return self.format.num_channels
+
+    @property
+    def sample_type(self):
+        warnings.warn("sample_type is deprecated, use '.format.sample_type' instead", DeprecationWarning)
+        return self.format.sample_type
+
+    def __getitem__(self, int index) -> memoryview:
         self._ensure_open()
-        if PyIndex_Check(index):
-            index = PyNumber_Index(index)
 
-            lib = self.funcs
-            frame = <VSFrame*> self.constf
-            format = lib.getAudioFrameFormat(frame)
+        lib = self.funcs
+        frame = <VSFrame*> self.constf
+        format = lib.getAudioFrameFormat(frame)
 
-            if index < 0:
-                index += format.numChannels
-            if not 0 <= index < format.numChannels:
-                raise IndexError("index out of range")
+        if index < 0:
+            index += format.numChannels
+        if not 0 <= index < format.numChannels:
+            raise IndexError("index out of range")
 
-            data = _audio.allocinfo(format)
-            data.base.obj = createFramePtr(self.funcs.addFrameRef(self.constf), self.funcs)
-            data.base.readonly = not self.flags & 1
+        data = _audio.allocinfo(format)
+        data.base.obj = createFramePtr(self.funcs.addFrameRef(self.constf), self.funcs)
+        data.base.readonly = not self.flags & 1
 
-            _audio.fillinfo(&data.base, frame, index, &self.flags, lib)
+        _audio.fillinfo(&data.base, frame, index, &self.flags, lib)
 
-            return PyMemoryView_FromObject(data)
-        else:
-            raise TypeError("frame indices must be integers, not %s"
-                            % (type(index).__name__,))
+        return PyMemoryView_FromObject(data)
 
     def __len__(self):
         self._ensure_open()
@@ -1841,22 +1552,24 @@ cdef class AudioFrame(RawFrame):
 
     def __repr__(self):
         return _construct_repr(
-            self, sample_type=self.sample_type,
-            bits_per_sample=self.bits_per_sample,
-            bytes_per_sample=self.bytes_per_sample,
-            num_channels=self.num_channels, channels=iter(self.channels),
+            self,
+            sample_type=self.format.sample_type,
+            bits_per_sample=self.format.bits_per_sample,
+            bytes_per_sample=self.format.bytes_per_sample,
+            num_channels=self.format.num_channels,
+            channels=iter(self.format.channel_layout),
             readonly=self.readonly
         )
 
     def __str__(self):
-        channels = ', '.join([c.name for c in self.channels])
+        channels = ', '.join(c.name for c in self.format.channel_layout)
 
         return (
             'AudioFrame\n'
-            f'\tSample Type: {self.sample_type.name}\n'
-            f'\tBits Per Sample: {self.bits_per_sample:d}\n'
-            f'\tBytes Per Sample: {self.bytes_per_sample:d}\n'
-            f'\tNum Channels: {self.num_channels:d}\n'
+            f'\tSample Type: {self.format.sample_type.name}\n'
+            f'\tBits Per Sample: {self.format.bits_per_sample:d}\n'
+            f'\tBytes Per Sample: {self.format.bytes_per_sample:d}\n'
+            f'\tNum Channels: {self.format.num_channels:d}\n'
             f'\tChannels: {channels}\n'
             f'\tReadonly: {str(self.readonly)}\n'
         )
@@ -1870,13 +1583,8 @@ cdef AudioFrame createConstAudioFrame(const VSFrame *constf, const VSAPI *funcs,
     instance.core = core
     instance.flags = 0
     cdef const VSAudioFormat *format = funcs.getAudioFrameFormat(constf)
-    instance.sample_type = SampleType(format.sampleType)
-    instance.bits_per_sample = format.bitsPerSample
-    instance.bytes_per_sample = format.bytesPerSample
-    instance.channel_layout = format.channelLayout
-    instance.num_channels = format.numChannels
+    instance.format = createAudioFormat(format, funcs, core)
     return instance
-
 
 cdef AudioFrame createAudioFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
     cdef AudioFrame instance = AudioFrame.__new__(AudioFrame)
@@ -1886,11 +1594,7 @@ cdef AudioFrame createAudioFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
     instance.core = core
     instance.flags = -1
     cdef const VSAudioFormat *format = funcs.getAudioFrameFormat(f)
-    instance.sample_type = SampleType(format.sampleType)
-    instance.bits_per_sample = format.bitsPerSample
-    instance.bytes_per_sample = format.bytesPerSample
-    instance.channel_layout = format.channelLayout
-    instance.num_channels = format.numChannels
+    instance.format = createAudioFormat(format, funcs, core)
     return instance
 
 
@@ -1898,10 +1602,6 @@ cdef AudioFrame createAudioFrame(VSFrame *f, const VSAPI *funcs, VSCore *core):
 @cython.internal
 @cython.freelist(16)
 cdef class _1dview_contig:
-    cdef:
-        Py_buffer base
-        ssize_t smalltable[1]  # shape
-
     def __cinit__(self):
         # need Py_buffer.obj to be non-NULL
         PyBuffer_FillInfo(&self.base, None, NULL, 0, True, PyBUF_SIMPLE)
@@ -1930,11 +1630,9 @@ cdef class _1dview_contig:
 @cython.final
 @cython.internal
 cdef class _audio:
-
     @staticmethod
     cdef _1dview_contig allocinfo(const VSAudioFormat* format):
-        cdef:
-            _1dview_contig self
+        cdef _1dview_contig self
 
         self = _1dview_contig.__new__(_1dview_contig)
         self.base.itemsize = format.bytesPerSample
@@ -1954,9 +1652,9 @@ cdef class _audio:
     cdef void fillinfo(Py_buffer* view, VSFrame* frame, int channel, unsigned* flags, const VSAPI* lib) nogil:
         view.shape[0] = lib.getFrameLength(frame)
         view.len = view.shape[0] * view.itemsize
-        view.buf = _frame.getdata(frame, channel, flags, lib)
+        view.buf = _frame_getdata(frame, channel, flags, lib)
 
-cdef _get_handle_future():
+cdef object _get_handle_future():
     fut = Future()
     fut.set_running_or_notify_cancel()
 
@@ -1970,13 +1668,7 @@ cdef _get_handle_future():
 
     return _handle_future
 
-cdef class RawNode(object):
-    cdef VSNode *node
-    cdef const VSAPI *funcs
-    cdef Core core
-
-    cdef object __weakref__
-
+cdef class RawNode:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2030,7 +1722,7 @@ cdef class RawNode(object):
 
         finished = False
         running = 0
-        lock = RLock()
+        lock = threading.RLock()
         reorder = {}
         curr_frames = 0
 
@@ -2123,7 +1815,7 @@ cdef class RawNode(object):
     cdef bint _inspectable(self):
         if self.funcs.getAPIVersion() != VAPOURSYNTH_API_VERSION:
             return False
-        return bool(self.core.flags & ccfEnableGraphInspection)
+        return self.core.creationFlags & ccfEnableGraphInspection
 
     def is_inspectable(self, version=None):
         if version != 0:
@@ -2155,26 +1847,38 @@ cdef class RawNode(object):
             for idx in range(self.funcs.getNumNodeDependencies(self.node))
         )
 
+    def get_graph(self, mode: str = "full", processing_time: float = 0.0):
+        if not self._inspectable():
+             raise Error("This node is not inspectable.")
+
+        return self.core.timings.get_graph(self, mode=mode, processing_time=processing_time)
+
+    def get_filter_time(self, processing_time: float):
+        if not self._inspectable():
+            raise Error("This node is not inspectable.")
+
+        return self.core.timings.get_filter_time(self, processing_time=processing_time)
+
     @property
     def _name(self):
         if not self._inspectable():
             raise Error("This node is not inspectable.")
 
-        return self.funcs.getNodeCreationFunctionName(self.node, 0).decode("utf-8")
+        return (<bytes>self.funcs.getNodeCreationFunctionName(self.node, 0)).decode("utf-8")
 
     @property
     def _plugin_id(self):
         if not self._inspectable():
             raise Error("This node is not inspectable.")
 
-        return self.funcs.getNodeCreationPluginID(self.node, 0).decode("utf-8")
+        return (<bytes>self.funcs.getNodeCreationPluginID(self.node, 0)).decode("utf-8")
 
     @property
     def _plugin_ns(self):
         if not self._inspectable():
             raise Error("This node is not inspectable.")
 
-        return self.funcs.getNodeCreationPluginNS(self.node, 0).decode("utf-8")
+        return (<bytes>self.funcs.getNodeCreationPluginNS(self.node, 0)).decode("utf-8")
 
     @property
     def _inputs(self):
@@ -2224,21 +1928,12 @@ cdef class RawNode(object):
 
 
 cdef class VideoNode(RawNode):
-    cdef const VSVideoInfo *vi
-    cdef readonly VideoFormat format
-    cdef readonly int width
-    cdef readonly int height
-    cdef readonly int num_frames
-    cdef readonly int64_t fps_num
-    cdef readonly int64_t fps_den
-    cdef readonly object fps
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
-    def __getattr__(self, name):
+    def __getattr__(self, str name) -> Plugin:
         try:
-            obj = self.core.__getattr__(name)
+            obj = getattr(self.core, name)
             if isinstance(obj, Plugin):
                 (<Plugin>obj).injected_arg = self
             return obj
@@ -2251,8 +1946,8 @@ cdef class VideoNode(RawNode):
         if (self.num_frames > 0) and (n >= self.num_frames):
             raise ValueError('Requesting frame number is beyond the last frame')
 
-    def get_frame(self, int n):
-        cdef char errorMsg[4096]
+    def get_frame(self, int n) -> VideoFrame:
+        cdef char[4096] errorMsg
         cdef char *ep = errorMsg
         cdef const VSFrame *f
         self.ensure_valid_frame_number(n)
@@ -2284,7 +1979,14 @@ cdef class VideoNode(RawNode):
 
         _get_output_dict("set_output")[index] = VideoOutputTuple(self, alpha, alt_output)
 
-    def output(self, object fileobj not None, bint y4m = False, object progress_update = None, int prefetch = 0, int backlog = -1):
+    def output(
+        self, object fileobj not None,
+        bint y4m = False,
+        object progress_update = None,
+        object frame_cb = None,
+        int prefetch = 0,
+        int backlog = -1,
+    ):
         if (fileobj is sys.stdout or fileobj is sys.stderr):
             # If you are embedded in a vsscript-application, don't allow outputting to stdout/stderr.
             # This is the responsibility of the application, which does know better where to output it.
@@ -2295,56 +1997,115 @@ cdef class VideoNode(RawNode):
                 fileobj = fileobj.buffer
 
         if progress_update is not None:
-            progress_update(0, len(self))
+            if not callable(progress_update):
+                raise TypeError("progress_update must be a callable")
+            progress_update(0, self.num_frames)
+
+        if frame_cb is not None and not callable(frame_cb):
+            raise TypeError("frame_cb must be a callable")
 
         if y4m:
             if self.format.color_family == cfGray:
-                y4mformat = 'mono'
+                y4mformat = "mono"
                 if self.format.bits_per_sample > 8:
-                    y4mformat = y4mformat + str(self.format.bits_per_sample)
+                    y4mformat += str(self.format.bits_per_sample)
             elif self.format.color_family == cfYUV:
-                if self.format.subsampling_w == 1 and self.format.subsampling_h == 1:
-                    y4mformat = '420'
-                elif self.format.subsampling_w == 1 and self.format.subsampling_h == 0:
-                    y4mformat = '422'
-                elif self.format.subsampling_w == 0 and self.format.subsampling_h == 0:
-                    y4mformat = '444'
-                elif self.format.subsampling_w == 2 and self.format.subsampling_h == 2:
-                    y4mformat = '410'
-                elif self.format.subsampling_w == 2 and self.format.subsampling_h == 0:
-                    y4mformat = '411'
-                elif self.format.subsampling_w == 0 and self.format.subsampling_h == 1:
-                    y4mformat = '440'
+                if (self.format.subsampling_w, self.format.subsampling_h) == (1, 1):
+                    y4mformat = "420"
+                elif (self.format.subsampling_w, self.format.subsampling_h) == (1, 0):
+                    y4mformat = "422"
+                elif (self.format.subsampling_w, self.format.subsampling_h) == (0, 0):
+                    y4mformat = "444"
+                elif (self.format.subsampling_w, self.format.subsampling_h) == (2, 2):
+                    y4mformat = "410"
+                elif (self.format.subsampling_w, self.format.subsampling_h) == (2, 0):
+                    y4mformat = "411"
+                elif (self.format.subsampling_w, self.format.subsampling_h) == (0, 1):
+                    y4mformat = "440"
+                else:
+                    raise NotImplementedError
+
                 if self.format.bits_per_sample > 8:
-                    y4mformat = y4mformat + 'p' + str(self.format.bits_per_sample)
+                    y4mformat += f"p{self.format.bits_per_sample}"
             else:
-                raise ValueError("Can only use GRAY and YUV for V4M-Streams")
+                raise ValueError("Can only use GRAY and YUV for Y4M-Streams")
 
-            if len(y4mformat) > 0:
-                y4mformat = 'C' + y4mformat + ' '
-
-            data = 'YUV4MPEG2 {y4mformat}W{width} H{height} F{fps_num}:{fps_den} Ip A0:0 XLENGTH={length}\n'.format(
-                y4mformat=y4mformat,
-                width=self.width,
-                height=self.height,
-                fps_num=self.fps_num,
-                fps_den=self.fps_den,
-                length=len(self)
+            data = (
+                f"YUV4MPEG2 C{y4mformat} W{self.width} H{self.height} F{self.fps_num}:{self.fps_den} "
+                f"Ip A0:0 XLENGTH={self.num_frames}\n"
             )
             fileobj.write(data.encode("ascii"))
 
         write = fileobj.write
-        readchunks = VideoFrame.readchunks
+        total = self.num_frames
 
-        for idx, frame in enumerate(self.frames(prefetch, backlog, close=True)):
-            if y4m:
-                fileobj.write(b"FRAME\n")
+        cdef:
+            const VSAPI *lib = self.funcs
+            const VSVideoFormat *fi
+            uint8_t *buffer = NULL
+            size_t buffer_size = <size_t>0
+            ptrdiff_t stride
+            const uint8_t *readPtr
+            size_t rowSize
+            int height
+            int p
+            const VSFrame *constf
 
-            for chunk in readchunks(frame):
-                write(chunk)
+        # Pre-allocate buffer for packing
+        buffer_size = <size_t>(self.width * self.height * self.format.bytes_per_sample)
+        buffer = <uint8_t *>malloc(buffer_size)
+        if not buffer:
+            raise Error("Failed to allocate memory for output buffer")
 
-            if progress_update is not None:
-                progress_update(idx+1, len(self))
+        try:
+            for idx, frame in enumerate(self.frames(prefetch, backlog, close=True)):
+                if y4m:
+                    fileobj.write(b"FRAME\n")
+
+                constf = (<VideoFrame>frame).constf
+                fi = lib.getVideoFrameFormat(constf)
+                for p in range(fi.numPlanes):
+                    stride = lib.getStride(constf, p)
+                    readPtr = lib.getReadPtr(constf, p)
+                    rowSize = <size_t>lib.getFrameWidth(constf, p) * fi.bytesPerSample
+                    height = lib.getFrameHeight(constf, p)
+
+                    if stride == <ptrdiff_t>rowSize:
+                        write(PyMemoryView_FromMemory(<char *>readPtr, rowSize * height, PyBUF_READ))
+                    else:
+                        with nogil:
+                            bitblt(buffer, rowSize, readPtr, stride, rowSize, height)
+                        write(PyMemoryView_FromMemory(<char *>buffer, rowSize * height, PyBUF_READ))
+
+                alpha = frame.props.get("_Alpha")
+                if alpha is not None:
+                    if y4m:
+                        raise ValueError("Can only apply y4m headers to clips without alpha")
+
+                    constf = (<VideoFrame>alpha).constf
+                    fi = lib.getVideoFrameFormat(constf)
+                    for p in range(fi.numPlanes):
+                        stride = lib.getStride(constf, p)
+                        readPtr = lib.getReadPtr(constf, p)
+                        rowSize = <size_t>lib.getFrameWidth(constf, p) * fi.bytesPerSample
+                        height = lib.getFrameHeight(constf, p)
+
+                        if stride == <ptrdiff_t>rowSize:
+                            write(PyMemoryView_FromMemory(<char *>readPtr, rowSize * height, PyBUF_READ))
+                        else:
+                            with nogil:
+                                bitblt(buffer, rowSize, readPtr, stride, rowSize, height)
+                            write(PyMemoryView_FromMemory(<char *>buffer, rowSize * height, PyBUF_READ))
+
+                    alpha.close()
+
+                if frame_cb:
+                    frame_cb(idx, frame)
+
+                if progress_update is not None:
+                    progress_update(idx + 1, total)
+        finally:
+            free(buffer)
 
         if hasattr(fileobj, "flush"):
             fileobj.flush()
@@ -2352,7 +2113,7 @@ cdef class VideoNode(RawNode):
     def __add__(self, other):
         if not isinstance(self, VideoNode) or not isinstance(other, VideoNode):
             return NotImplemented
-        return (<VideoNode>self).core.std.Splice(clips=[self, other])
+        return self.core.std.Splice(clips=[self, other])
 
     def __mul__(self, other):
         if isinstance(self, VideoNode):
@@ -2469,30 +2230,50 @@ cdef VideoNode createVideoNode(VSNode *node, const VSAPI *funcs, Core core):
     return instance
 
 cdef class AudioNode(RawNode):
-    cdef const VSAudioInfo *ai
-    cdef readonly object sample_type
-    cdef readonly int bits_per_sample
-    cdef readonly int bytes_per_sample
-    cdef readonly uint64_t channel_layout
-    cdef readonly int num_channels
-    cdef readonly int sample_rate
-    cdef readonly int64_t num_samples
-    cdef readonly int num_frames
-
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
-    def __getattr__(self, name):
-        err = False
+    @property
+    def channel_layout(self):
+        warnings.warn("channel_layout is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
+
+    @property
+    def channels(self):
+        warnings.warn("channels is deprecated, use '.format.channel_layout' instead", DeprecationWarning)
+        return ChannelLayout(self.format.channelLayout)
+
+    @property
+    def bits_per_sample(self):
+        warnings.warn("bits_per_sample is deprecated, use '.format.bits_per_sample' instead", DeprecationWarning)
+        return self.format.bits_per_sample
+
+    @property
+    def bytes_per_sample(self):
+        warnings.warn("bytes_per_sample is deprecated, use '.format.bytes_per_sample' instead", DeprecationWarning)
+        return self.format.bytes_per_sample
+
+    @property
+    def num_channels(self):
+        warnings.warn("num_channels is deprecated, use '.format.num_channels' instead", DeprecationWarning)
+        return self.format.num_channels
+
+    @property
+    def sample_type(self):
+        warnings.warn("sample_type is deprecated, use '.format.sample_type' instead", DeprecationWarning)
+        return self.format.sample_type
+
+    def __getattr__(self, str name) -> Plugin:
         try:
-            obj = self.core.__getattr__(name)
+            obj = getattr(self.core, name)
             if isinstance(obj, Plugin):
                 (<Plugin>obj).injected_arg = self
             return obj
         except AttributeError:
-            err = True
-        if err:
-            raise AttributeError(f'There is no attribute or namespace named {name}. Did you mistype a plugin namespace or forget to install a plugin?')
+            raise AttributeError(
+                f"There is no attribute or namespace named {name}. "
+                "Did you mistype a plugin namespace or forget to install a plugin?"
+            ) from None
 
     cdef ensure_valid_frame_number(self, int n):
         if n < 0:
@@ -2501,7 +2282,7 @@ cdef class AudioNode(RawNode):
             raise ValueError('Requesting frame number is beyond the last frame')
 
     def get_frame(self, int n):
-        cdef char errorMsg[4096]
+        cdef char[4096] errorMsg
         cdef char *ep = errorMsg
         cdef const VSFrame *f
         self.ensure_valid_frame_number(n)
@@ -2516,7 +2297,16 @@ cdef class AudioNode(RawNode):
         else:
             return createConstAudioFrame(f, self.funcs, self.core.core)
 
-    def output(self, object fileobj not None, bint wav = False, bint w64 = False, object progress_update = None, int prefetch = 0, int backlog = -1):
+    def output(
+        self,
+        object fileobj not None,
+        bint wav = False,
+        bint w64 = False,
+        object progress_update = None,
+        object frame_cb = None,
+        int prefetch = 0,
+        int backlog = -1,
+    ):
         if (fileobj is sys.stdout or fileobj is sys.stderr):
             # If you are embedded in a vsscript-application, don't allow outputting to stdout/stderr.
             # This is the responsibility of the application, which does know better where to output it.
@@ -2533,25 +2323,28 @@ cdef class AudioNode(RawNode):
             WaveHeader whdr
             Wave64Header w64hdr
 
-            size_t bytes_per_output_sample = (self.bits_per_sample + 7) // 8
+            size_t bytes_per_output_sample = (self.format.bits_per_sample + 7) // 8
             # VapourSynth audio frames contain at most VS_AUDIO_FRAME_SAMPLES samples
-            size_t buffer_size = VS_AUDIO_FRAME_SAMPLES * self.num_channels * bytes_per_output_sample
+            size_t buffer_size = VS_AUDIO_FRAME_SAMPLES * self.format.num_channels * bytes_per_output_sample
 
             uint8_t *interleave_buffer = <uint8_t *>malloc(buffer_size)
-            const uint8_t **src_ptrs = <const uint8_t **>malloc(self.num_channels * sizeof(uint8_t *))
+            const uint8_t **src_ptrs = <const uint8_t **>malloc(self.format.num_channels * sizeof(uint8_t *))
 
             void (*pack_func)(const uint8_t *const *const, uint8_t *, size_t, size_t) noexcept nogil
 
         if progress_update is not None:
                 progress_update(0, self.num_frames)
 
+        if frame_cb is not None and not callable(frame_cb):
+            raise TypeError("frame_cb must be a callable")
+
         if w64:
             if not CreateWave64Header(
                 w64hdr,
-                self.sample_type == SampleType.FLOAT,
-                self.bits_per_sample,
+                self.format.sample_type == SampleType.FLOAT,
+                self.format.bits_per_sample,
                 self.sample_rate,
-                self.channel_layout,
+                self.format.channel_layout,
                 self.num_samples,
             ):
                 raise Error("Failed to create WAVE64 header")
@@ -2559,10 +2352,10 @@ cdef class AudioNode(RawNode):
         elif wav:
             if not CreateWaveHeader(
                 whdr,
-                self.sample_type == SampleType.FLOAT,
-                self.bits_per_sample,
+                self.format.sample_type == SampleType.FLOAT,
+                self.format.bits_per_sample,
                 self.sample_rate,
-                self.channel_layout,
+                self.format.channel_layout,
                 self.num_samples,
             ):
                 raise Error("Failed to create WAV header")
@@ -2584,7 +2377,7 @@ cdef class AudioNode(RawNode):
         else:
             free(src_ptrs)
             free(interleave_buffer)
-            raise Error(f"Unsupported bit depth for output: {self.bits_per_sample}")
+            raise Error(f"Unsupported bit depth for output: {self.format.bits_per_sample}")
 
         cdef:
             AudioFrame af
@@ -2598,7 +2391,7 @@ cdef class AudioNode(RawNode):
             for idx, frame in enumerate(self.frames(prefetch, backlog, close=True)):
                 af = <AudioFrame>frame
                 num_samples_in_frame = af.funcs.getFrameLength(af.constf)
-                required_size = <size_t>num_samples_in_frame * self.num_channels * bytes_per_output_sample
+                required_size = <size_t>num_samples_in_frame * self.format.num_channels * bytes_per_output_sample
 
                 if required_size > buffer_size:
                     new_buffer = <uint8_t *>realloc(interleave_buffer, required_size)
@@ -2610,12 +2403,15 @@ cdef class AudioNode(RawNode):
                     buffer_size = required_size
 
                 with nogil:
-                    for c in range(self.num_channels):
+                    for c in range(self.format.num_channels):
                         src_ptrs[c] = af.funcs.getReadPtr(af.constf, c)
 
-                    pack_func(src_ptrs, interleave_buffer, num_samples_in_frame, self.num_channels)
+                    pack_func(src_ptrs, interleave_buffer, num_samples_in_frame, self.format.num_channels)
 
                 write((<char *>interleave_buffer)[:required_size])
+
+                if frame_cb is not None:
+                    frame_cb(idx, frame)
 
                 if progress_update is not None:
                     progress_update(idx + 1, self.num_frames)
@@ -2628,10 +2424,6 @@ cdef class AudioNode(RawNode):
 
     def set_output(self, int index = 0):
         _get_output_dict("set_output")[index] = self
-
-    @property
-    def channels(self):
-        return ChannelLayout(self.channel_layout)
 
     def __add__(self, other):
         if not isinstance(self, AudioNode) or not isinstance(other, AudioNode):
@@ -2711,10 +2503,10 @@ cdef class AudioNode(RawNode):
 
     def __repr__(self):
         return _construct_repr(
-            self, sample_type=self.sample_type,
-            bits_per_sample=self.bits_per_sample,
-            bytes_per_sample=self.bytes_per_sample,
-            num_channels=self.num_channels,
+            self, sample_type=self.format.sample_type,
+            bits_per_sample=self.format.bits_per_sample,
+            bytes_per_sample=self.format.bytes_per_sample,
+            num_channels=self.format.num_channels,
             channels=iter(self.channels), sample_rate=self.sample_rate,
             num_samples=self.num_samples
 
@@ -2725,10 +2517,10 @@ cdef class AudioNode(RawNode):
 
         return (
             'AudioNode\n'
-            f'\tSample Type: {self.sample_type.name}\n'
-            f'\tBits Per Sample: {self.bits_per_sample:d}\n'
-            f'\tBytes Per Sample: {self.bytes_per_sample:d}\n'
-            f'\tNum Channels: {self.num_channels:d}\n'
+            f'\tSample Type: {self.format.sample_type.name}\n'
+            f'\tBits Per Sample: {self.format.bits_per_sample:d}\n'
+            f'\tBytes Per Sample: {self.format.bytes_per_sample:d}\n'
+            f'\tNum Channels: {self.format.num_channels:d}\n'
             f'\tChannels: {channels}\n'
             f'\tSample Rate: {self.sample_rate:d}\n'
             f'\tNum Samples: {self.num_samples:d}\n'
@@ -2740,20 +2532,13 @@ cdef AudioNode createAudioNode(VSNode *node, const VSAPI *funcs, Core core):
     instance.node = node
     instance.funcs = funcs
     instance.ai = funcs.getAudioInfo(node)
+    instance.format = createAudioFormat(&instance.ai.format, funcs, core.core)
     instance.sample_rate = instance.ai.sampleRate
     instance.num_samples = instance.ai.numSamples
     instance.num_frames = instance.ai.numFrames
-    instance.sample_type = SampleType(instance.ai.format.sampleType)
-    instance.bits_per_sample = instance.ai.format.bitsPerSample
-    instance.bytes_per_sample = instance.ai.format.bytesPerSample
-    instance.channel_layout = instance.ai.format.channelLayout
-    instance.num_channels = instance.ai.format.numChannels
     return instance
 
-cdef class LogHandle(object):
-    cdef VSLogHandle *handle
-    cdef object handler_func
-
+cdef class LogHandle:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2763,20 +2548,16 @@ cdef LogHandle createLogHandle(object handler_func):
     instance.handle = NULL
     return instance
 
-cdef void __stdcall log_handler_wrapper(int msgType, const char *msg, void *userData) noexcept nogil:
+cdef void log_handler_wrapper(int msgType, const char *msg, void *userData) noexcept nogil:
     with gil:
         (<LogHandle>userData).handler_func(msgType, msg.decode('utf-8'))
 
-cdef void __stdcall log_handler_free(void *userData) noexcept nogil:
+cdef void log_handler_free(void *userData) noexcept nogil:
     with gil:
         Py_DECREF(<LogHandle>userData)
 
 
-cdef class CoreTimings(object):
-    cdef Core core
-
-    cdef object __weakref__
-
+cdef class CoreTimings:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2810,6 +2591,27 @@ cdef class CoreTimings(object):
             f'\tFreed Nodes Time: {self.freed_nodes}\n'
         )
 
+    def get_graph(self, RawNode node not None, mode: str = "full", double processing_time = 0.0):
+        cdef NodePrintMode pmode = NodePrintMode.Full
+        if mode == "simple":
+            pmode = NodePrintMode.Simple
+        elif mode == "times":
+            pmode = NodePrintMode.FullWithTimes
+
+        cdef string s
+        with nogil:
+             s = printNodeGraph(pmode, node.node, processing_time, node.funcs)
+
+        return s.decode("utf-8")
+
+    def get_filter_time(self, RawNode node not None, double processing_time):
+        cdef string s
+        cdef int64_t freed_time = self.freed_nodes
+        with nogil:
+            s = printNodeTimes(node.node, processing_time, freed_time, node.funcs)
+
+        return s.decode("utf-8")
+
 cdef CoreTimings createCoreTimings(Core core):
     cdef CoreTimings instance = CoreTimings.__new__(CoreTimings)
     instance.core = core
@@ -2817,15 +2619,7 @@ cdef CoreTimings createCoreTimings(Core core):
     return instance
 
 
-cdef class Core(object):
-    cdef int creationFlags
-    cdef VSCore *core
-    cdef const VSAPI *funcs
-
-    cdef readonly object timings
-
-    cdef object __weakref__
-
+cdef class Core:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -2869,7 +2663,7 @@ cdef class Core(object):
     def flags(self):
         return self.creationFlags
 
-    def __getattr__(self, name):
+    def __getattr__(self, str name) -> Plugin:
         cdef VSPlugin *plugin
         tname = name.encode('utf-8')
         cdef const char *cname = tname
@@ -2892,6 +2686,12 @@ cdef class Core(object):
         if not self.funcs.queryVideoFormat(&fmt, color_family, sample_type, bits_per_sample, subsampling_w, subsampling_h, self.core):
             raise Error('Invalid format specified')
         return createVideoFormat(&fmt, self.funcs, self.core)
+
+    def query_audio_format(self, int sample_type, int bits_per_sample, uint64_t channel_layout):
+        cdef VSAudioFormat fmt
+        if not self.funcs.queryAudioFormat(&fmt, sample_type, bits_per_sample, channel_layout, self.core):
+            raise Error('Invalid format specified')
+        return createAudioFormat(&fmt, self.funcs, self.core)
 
     def get_video_format(self, uint32_t id):
         cdef VSVideoFormat fmt
@@ -3017,7 +2817,7 @@ cdef Core createCore2(VSCore *core):
         instance.log_message(mtWarning, f'Version mismatch: The VapourSynth Python module version is R{__version__.release_major:d} but the VapourSynth core library is R{instance.core_version.release_major:d}. This usually indicates a broken install.')
     return instance
 
-cdef Core _get_core(threads = None):
+cdef Core _get_core():
     env = _env_current()
     if env is None:
         raise Error('No environment is currently activated. Please activate an environment. (Hint: get_current_environment().use() allows you to temporary select an environment of your choice.)')
@@ -3029,8 +2829,7 @@ cdef Core vsscript_get_core_internal(EnvironmentData env):
         env.core = createCore(env)
     return env.core
 
-cdef class _CoreProxy(object):
-
+cdef class _CoreProxy:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
@@ -3094,19 +2893,11 @@ class PluginVersion(typing.NamedTuple):
     major: int
     minor: int
 
-cdef class Plugin(object):
-    cdef Core core
-    cdef VSPlugin *plugin
-    cdef const VSAPI *funcs
-    cdef object injected_arg
-    cdef readonly str identifier
-    cdef readonly str namespace
-    cdef readonly str name
-
+cdef class Plugin:
     def __init__(self):
         raise Error('Class cannot be instantiated directly')
 
-    def __getattr__(self, name):
+    def __getattr__(self, str name) -> Function:
         tname = name.encode('utf-8')
         cdef const char *cname = tname
         cdef VSPluginFunction *func = self.funcs.getPluginFunctionByName(cname, self.plugin)
@@ -3184,14 +2975,7 @@ cdef Plugin createPlugin(VSPlugin *plugin, const VSAPI *funcs, Core core):
     instance.name = funcs.getPluginName(plugin).decode('utf-8')
     return instance
 
-cdef class Function(object):
-    cdef const VSAPI *funcs
-    cdef const VSPluginFunction *func
-    cdef readonly Plugin plugin
-    cdef readonly str name
-    cdef readonly str signature
-    cdef readonly str return_signature
-
+cdef class Function:
     @property
     def __signature__(self):
         return construct_signature(
@@ -3328,66 +3112,14 @@ cdef Function createFunction(VSPluginFunction *func, Plugin plugin, const VSAPI 
     return instance
 
 
-
-# for python functions being executed by vs
-
-_warnings_showwarning = None
-def _showwarning(message, category, filename, lineno, file=None, line=None):
-    """
-    Implementation of showwarnings which redirects to vapoursynth core logging.
-
-    Note: This is apparently how python-logging does this.
-    """
-    if file is not None:
-        if _warnings_showwarning is not None:
-            _warnings_showwarning(message, category, filename, lineno, file, line)
-    else:
-        env = _env_current()
-        if env is None:
-            _warnings_showwarning(message, category, filename, lineno, file, line)
-            return
-
-        s = warnings.formatwarning(message, category, filename, lineno, line)
-        core = vsscript_get_core_internal(env)
-        core.log_message(mtWarning, s)
-
-class PythonVSScriptLoggingBridge(logging.Handler):
-
-    def __init__(self, parent, level=logging.NOTSET):
-        super().__init__(level)
-        self._parent = parent
-
-    def emit(self, record):
-        env = _env_current()
-        if env is None:
-            self.parent.handle(record)
-            return
-        core = vsscript_get_core_internal(env)
-
-        message = self.format(record)
-
-        if record.levelno < logging.INFO:
-            mt = MessageType.MESSAGE_TYPE_DEBUG
-        elif record.levelno < logging.WARN:
-            mt = MessageType.MESSAGE_TYPE_INFORMATION
-        elif record.levelno < logging.ERROR:
-            mt = MessageType.MESSAGE_TYPE_WARNING
-        elif record.levelno < logging.FATAL:
-            mt = MessageType.MESSAGE_TYPE_CRITICAL
-        else:
-            mt = MessageType.MESSAGE_TYPE_CRITICAL
-            message = "Fatal: " + message
-
-        core.log_message(mt, message)
-
-cdef void __stdcall freeFunc(void *pobj) noexcept nogil:
+cdef void freeFunc(void *pobj) noexcept nogil:
     with gil:
         fobj = <FuncData>pobj
         Py_DECREF(fobj)
         fobj = None
 
 
-cdef void __stdcall publicFunction(const VSMap *inm, VSMap *outm, void *userData, VSCore *core, const VSAPI *vsapi) noexcept nogil:
+cdef void publicFunction(const VSMap *inm, VSMap *outm, void *userData, VSCore *core, const VSAPI *vsapi) noexcept nogil:
     with gil:
         d = <FuncData>userData
         try:
@@ -3410,7 +3142,44 @@ cdef void __stdcall publicFunction(const VSMap *inm, VSMap *outm, void *userData
                 vsapi.mapSetError(outm, emsg)
 
 
-@final
+cdef const VSAPI *getVSAPIInternal() except NULL nogil:
+    global _vsapi
+    if _vsapi == NULL:
+        _vsapi = getVapourSynthAPI(VAPOURSYNTH_API_VERSION)
+    return _vsapi
+
+
+# for python functions being executed by vs
+class PythonVSScriptLoggingBridge(logging.Handler):
+    def __init__(self, parent, level=logging.NOTSET):
+        super().__init__(level)
+        self._parent = parent
+
+    def emit(self, record):
+        env = _env_current()
+        if env is None:
+            self._parent.handle(record)
+            return
+        core = vsscript_get_core_internal(env)
+
+        message = self.format(record)
+
+        if record.levelno < logging.INFO:
+            mt = MessageType.MESSAGE_TYPE_DEBUG
+        elif record.levelno < logging.WARN:
+            mt = MessageType.MESSAGE_TYPE_INFORMATION
+        elif record.levelno < logging.ERROR:
+            mt = MessageType.MESSAGE_TYPE_WARNING
+        elif record.levelno < logging.FATAL:
+            mt = MessageType.MESSAGE_TYPE_CRITICAL
+        else:
+            mt = MessageType.MESSAGE_TYPE_CRITICAL
+            message = "Fatal: " + message
+
+        core.log_message(mt, message)
+
+
+@cython.final
 cdef class VSScriptEnvironmentPolicy:
     cdef dict _env_map
 
@@ -3423,16 +3192,13 @@ cdef class VSScriptEnvironmentPolicy:
     def __init__(self):
         raise RuntimeError("Cannot instantiate this class directly.")
 
-    def on_policy_registered(self, policy_api):
-        global _warnings_showwarning
-
-        self._stack = ThreadLocal()
+    def on_policy_registered(self, EnvironmentPolicyAPI policy_api):
+        self._stack = threading.local()
         self._api = policy_api
         self._env_map = {}
 
         # Redirect warnings to the parent application.
-        _warnings_showwarning = warnings.showwarning
-        warnings.showwarning = _showwarning
+        logging.captureWarnings(True)
         warnings.filterwarnings("always", module="__vapoursynth__")
         warnings.filterwarnings("always", module="vapoursynth")
 
@@ -3442,14 +3208,11 @@ cdef class VSScriptEnvironmentPolicy:
         ])
 
     def on_policy_cleared(self):
-        global _warnings_showwarning
-
         self._env_map = None
         self._stack = None
 
         # Reset the warnings from the parent application
-        warnings.showwarning = _warnings_showwarning
-        _warnings_showwarning = None
+        logging.captureWarnings(False)
         warnings.resetwarnings()
 
         # Reset the logging to only use sys.stderr
@@ -3571,14 +3334,14 @@ cdef int _vpy_evaluate(VSScript *se, bytes script, str filename):
         with _vsscript_use_or_create_environment2(se.id, se).use():
             exec(code, pyenvdict, pyenvdict)
 
-    except SystemExit, e:
-        se.exitCode = e.code
+    except SystemExit as e:
+        se.exitCode = int(e.code)
         errstr = 'Python exit with code ' + str(e.code) + '\n'
         errstr = errstr.encode('utf-8')
         Py_INCREF(errstr)
         se.errstr = <void *>errstr
         return 3
-    except BaseException, e:
+    except BaseException as e:
         errstr = 'Python exception: ' + str(e) + '\n\n' + traceback.format_exc()
         errstr = errstr.encode('utf-8')
         Py_INCREF(errstr)
@@ -3606,6 +3369,7 @@ cdef public api int vpy4_createScript(VSScript *se) nogil:
             return 1
         return 0
 
+
 cdef public api int vpy4_evaluateBuffer(VSScript *se, const char *buffer, const char *scriptFilename) nogil:
     with gil:
         try:
@@ -3626,7 +3390,7 @@ cdef public api int vpy4_evaluateBuffer(VSScript *se, const char *buffer, const 
             else:
                 return _vpy_evaluate(se, buffer, fn)
 
-        except BaseException, e:
+        except BaseException as e:
             errstr = 'File reading exception:\n' + str(e)
             errstr = errstr.encode('utf-8')
             Py_INCREF(errstr)
@@ -3642,7 +3406,7 @@ cdef public api int vpy4_evaluateFile(VSScript *se, const char *scriptFilename) 
             with open(scriptFilename.decode('utf-8'), 'rb') as f:
                 script = f.read(1024*1024*16)
             return vpy4_evaluateBuffer(se, script, scriptFilename)
-        except BaseException, e:
+        except BaseException as e:
             errstr = 'File reading exception:\n' + str(e)
             errstr = errstr.encode('utf-8')
             Py_INCREF(errstr)
@@ -3775,11 +3539,6 @@ cdef public api VSCore *vpy4_getCore(VSScript *se) nogil:
 cdef public api const VSAPI *vpy4_getVSAPI(int version) nogil:
     return getVapourSynthAPI(version)
 
-cdef const VSAPI *getVSAPIInternal() nogil:
-    global _vsapi
-    if _vsapi == NULL:
-        _vsapi = getVapourSynthAPI(VAPOURSYNTH_API_VERSION)
-    return _vsapi
 
 cdef public api int vpy4_getVariable(VSScript *se, const char *name, VSMap *dst) nogil:
     with gil:

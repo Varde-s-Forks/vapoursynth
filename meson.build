@@ -68,6 +68,9 @@ add_project_arguments(
 
 if is_win
     add_project_arguments('-DVS_TARGET_OS_WINDOWS', '-D_UNICODE', '-DUNICODE', language: ['c', 'cpp'])
+    if cxx.get_id() == 'msvc'
+        add_project_arguments('/wd4551', language: ['c', 'cpp'])
+    endif
 elif host_system == 'darwin'
     add_project_arguments('-DVS_TARGET_OS_DARWIN', language: ['c', 'cpp'])
 elif host_system in ['dragonfly', 'freebsd', 'gnu', 'linux', 'netbsd', 'openbsd']
@@ -206,27 +209,55 @@ vapoursynth_dep = declare_dependency(
     link_with: libvapoursynth,
 )
 
-py.extension_module('vapoursynth',
-    files('src/common/wave.cpp', 'src/cython/vapoursynth.pyx'),
-    dependencies: [py_dep, vapoursynth_dep],
-    install: true,
-    install_rpath: '$ORIGIN',
-    limited_api: '3.12',
-    override_options: 'cython_language=cpp',
-    subdir: 'vapoursynth',
-)
+        py_ext_kwargs = {
+            'cython_args': ['-I' + meson.project_source_root() / 'src/pybindings'],
+            'dependencies': [py_dep, vapoursynth_dep],
+            'include_directories': [include_directories('src/pybindings'), include_directories('src/vsutils')],
+            'install': true,
+            'install_rpath': '$ORIGIN',
+            'limited_api': '3.12',
+            'override_options': 'cython_language=cpp',
+            'subdir': 'vapoursynth',
+        }
+
+        py.extension_module('_main',
+            files(
+                'src/common/wave.cpp',
+                'src/vsutils/printgraph.cpp',
+                'src/vsutils/vsjson.cpp',
+                'src/pybindings/_main.pyx'
+            ),
+            kwargs: py_ext_kwargs,
+        )
+
+        py.extension_module('_constants',
+            files('src/pybindings/_constants.pyx'),
+            kwargs: py_ext_kwargs,
+        )
 
 py.install_sources(
     files(
-        'src/py/__init__.py',
-        'src/py/__main__.py',
-        'src/py/_cli.py',
-        'src/py/_shell.py',
-        'src/py/_utils.py',
-        'src/py/vapoursynth.pyi',
+        'src/pybindings/__init__.py',
+        'src/pybindings/__main__.py',
+        'src/pybindings/_cli.py',
+        'src/pybindings/_shell.py',
+        'src/pybindings/_signatures.py',
+                'src/pybindings/_utils.py',
+        'src/pybindings/_constants.pyi',
+                'src/pybindings/_main.pyi',
     ),
     subdir: 'vapoursynth',
 )
+
+        py.install_sources(
+            files(
+                'src/pybindings/vspipe/__init__.py',
+                'src/pybindings/vspipe/_cli.py',
+                'src/pybindings/vspipe/_utils.py',
+                'src/pybindings/vspipe/_vsenv.py',
+            ),
+            subdir: 'vapoursynth/vspipe',
+        )
 
 libvsscript = library('vsscript',
     files('src/vsscript/vsscript.cpp'),
@@ -243,28 +274,6 @@ vsscript_dep = declare_dependency(
     link_with: libvsscript,
 )
 
-link_args = []
-
-if cxx.get_argument_syntax() == 'gcc' and is_win
-    link_args += '-municode'
-elif cxx.get_argument_syntax() == 'msvc'
-    link_args += ['/MANIFEST:EMBED', '/MANIFESTINPUT:' + (meson.project_source_root() / 'src/vspipe/vspipe.manifest')]
-endif
-
-executable('vspipe',
-    files(
-        'src/common/wave.cpp',
-        'src/vspipe/printgraph.cpp',
-        'src/vspipe/vsjson.cpp',
-        'src/vspipe/vspipe.cpp',
-    ),
-    dependencies: vsscript_dep,
-    gnu_symbol_visibility: 'hidden',
-    install: true,
-    install_dir: install_dir,
-    install_rpath: '$ORIGIN',
-    link_args: link_args,
-)
 
 if cxx.get_argument_syntax() == 'msvc'
     vsvfw = library('vsvfw',
