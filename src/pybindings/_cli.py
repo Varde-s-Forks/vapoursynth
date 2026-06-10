@@ -3,6 +3,7 @@ import sys
 
 from ._utils import (
     get_include,
+    get_pkgconfig_dir,
     get_plugin_dir,
     get_vsscript,
     register_install,
@@ -56,12 +57,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     get_include_parser.set_defaults(func=lambda *_: print(get_include()))
 
+    get_pkgconfig_dir_parser = subparsers.add_parser(
+        "get-pkgconfig-dir",
+        help="Print the bundled pkgconfig directory",
+        description="Print the bundled pkgconfig directory.",
+    )
+    get_pkgconfig_dir_parser.set_defaults(func=lambda *_: print(get_pkgconfig_dir()))
+
     get_plugin_dir_parser = subparsers.add_parser(
         "get-plugin-dir",
         help="Print the bundled plugin directory",
         description="Print the bundled plugin directory.",
     )
     get_plugin_dir_parser.set_defaults(func=lambda *_: print(get_plugin_dir()))
+
+    register_install_parser = subparsers.add_parser(
+        "register-install",
+        help="Register the current installation in the user environment",
+        description="Register the current installation in the user environment.",
+    )
+    register_install_parser.set_defaults(func=lambda *_: register_install())
 
     if sys.platform == "win32":
         open_plugin_dir_parser = subparsers.add_parser(
@@ -70,13 +85,6 @@ def build_parser() -> argparse.ArgumentParser:
             description="Open the bundled plugin directory in Explorer.",
         )
         open_plugin_dir_parser.set_defaults(func=lambda *_: _open_plugin_dir())
-
-        register_install_parser = subparsers.add_parser(
-            "register-install",
-            help="Register the current installation in the user environment",
-            description="Register the current installation in the user environment.",
-        )
-        register_install_parser.set_defaults(func=lambda *_: register_install())
 
         register_legacy_install_parser = subparsers.add_parser(
             "register-legacy-install",

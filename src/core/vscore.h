@@ -404,6 +404,7 @@ public:
 };
 
 struct VSFrame {
+    friend struct VSCore;
 private:
     std::atomic<long> refcount;
     VSMediaType contentType;
@@ -927,7 +928,7 @@ public:
     void setCacheMode(int mode);
     void setCacheOptions(int fixedSize, int maxSize, int maxHistorySize);
     void cacheFrame(const VSFrame *frame, int n);
-    void clearCache();
+    void clearCache(bool resetSize);
 
     // to get around encapsulation a bit, more elegant than making everything friends in this case
     void reserveThread();
@@ -947,24 +948,28 @@ private:
     std::unordered_map<NodeOutputKey, PVSFrameContext> allContexts;
     std::condition_variable newWork;
     std::condition_variable allIdle;
-    std::atomic<size_t> activeThreads;
-    std::atomic<size_t> idleThreads;
-    std::atomic<size_t> reqCounter;
+    size_t activeThreads;
+    size_t idleThreads;
+    size_t reqCounter;
+    size_t reqMemCounter;
     size_t maxThreads;
-    std::atomic<bool> stopThreads;
-    std::atomic<size_t> ticks;
+    size_t currentMaxThreads;
+    size_t ticks;
+    bool stopThreads;
+    bool flushCaches;
+    std::list<PVSFrameContext> altTasks;
     size_t getNumAvailableThreads();
     void queueTask(const PVSFrameContext &ctx);
     void wakeThread();
     void startInternalRequest(const PVSFrameContext &notify, NodeOutputKey key);
     void spawnThread();
-    static void runTasksWrapper(VSThreadPool *owner, std::atomic<bool> &stop);
-    void runTasks(std::atomic<bool> &stop);
+    static void runTasksWrapper(VSThreadPool *owner, bool &stop);
+    void runTasks(bool &stop);
     static bool taskCmp(const PVSFrameContext &a, const PVSFrameContext &b);
 public:
     VSThreadPool(VSCore *core);
     ~VSThreadPool();
-    void returnFrame(const VSFrameContext *rCtx, const PVSFrame &f);
+    void returnFrame(VSFrameContext *rCtx, const PVSFrame &f);
     size_t threadCount();
     size_t setThreadCount(size_t threads);
     void startExternal(const PVSFrameContext &context);
@@ -1094,7 +1099,10 @@ public:
 
     // Used only for frame ref debugging
     bool enableFrameRefDebug;
+    std::mutex frameRefMutex;
+    std::set<VSFrame *> frameRefs;
     static thread_local VSNode *currentProcessingNode;
+    std::string getFrameRefInfo();
     //
 
     void notifyCaches(bool needMemory);
@@ -1160,7 +1168,7 @@ public:
     void filterInstanceCreated() noexcept;
     void filterInstanceDestroyed() noexcept;
     void destroyFilterInstance(VSNode *node);
-    void clearCaches();
+    void clearCaches(bool resetSize);
     bool getNodeTiming() noexcept;
     void setNodeTiming(bool enable) noexcept;
     int64_t getFreedNodeProcessingTime(bool reset) noexcept;

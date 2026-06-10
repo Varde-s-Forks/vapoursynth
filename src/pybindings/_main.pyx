@@ -56,7 +56,7 @@ import typing
 import warnings
 import weakref
 from collections.abc import ItemsView, KeysView, MutableMapping, ValuesView
-from concurrent.futures import Future
+from concurrent.futures import Future, CancelledError as FutureCancelledError
 from fractions import Fraction
 from types import MappingProxyType
 
@@ -101,6 +101,30 @@ cdef class EnvironmentData:
                 RuntimeWarning
             )
         _unset_logger(self)
+
+    cdef int store_exception(self, object e):
+        if self.active_exceptions is None:
+            return 0
+
+        with self.exc_lock:
+            self.next_exc_id += 1
+            self.active_exceptions[self.next_exc_id] = e
+
+            if len(self.active_exceptions) > 1000:
+                self.active_exceptions.pop(next(iter(self.active_exceptions)), None)
+
+            return self.next_exc_id
+
+    cdef object retrieve_exception(self, str msg_str):
+        if self.active_exceptions is not None and msg_str.startswith("[VS_PY_EXC_ID:"):
+            try:
+                parts = msg_str.split("]\n", 1)
+                exc_id = int(parts[0][len("[VS_PY_EXC_ID:"):])
+                return self.active_exceptions.pop(exc_id, None)
+            except (ValueError, KeyError, IndexError):
+                pass
+        return None
+
 
 
 cdef class EnvironmentPolicy:
@@ -200,6 +224,9 @@ cdef class EnvironmentPolicyAPI:
         env.core = <Core>None
         env.log = NULL
         env.outputs = {}
+        env.active_exceptions = {}
+        env.next_exc_id = 0
+        env.exc_lock = Lock()
         env.coreCreationFlags = flags
         env.on_destroy = []
         env.env_locals = weakref.WeakKeyDictionary()
@@ -244,6 +271,8 @@ cdef class EnvironmentPolicyAPI:
         env.outputs = {}
         env.env_locals.clear()
         env.env_locals = None
+        env.active_exceptions = None
+        env.exc_lock = None
         env.alive = False
 
     def unregister_policy(self):
@@ -537,7 +566,10 @@ cdef class Func:
             self.funcs.callFunction(self.ref, inm, outm)
             error = self.funcs.mapGetError(outm)
             if error:
-                raise Error(error.decode('utf-8'))
+                msg_str = error.decode('utf-8')
+                env = _env_current()
+                py_exc = env.retrieve_exception(msg_str) if env is not None else None
+                raise py_exc or Error(msg_str)
             return mapToDict(outm, True)
         finally:
             vsapi.freeMap(outm)
@@ -600,10 +632,11 @@ cdef void frameDoneCallback(void *data, const VSFrame *f, int n, VSNode *node, c
 
         try:
             if f == NULL:
-                error = 'Internal error - no error message.'
+                error_str = 'Internal error - no error message.'
                 if errormsg != NULL:
-                    error = errormsg.decode('utf-8')
-                error = Error(error)
+                    error_str = errormsg.decode('utf-8')
+                py_exc = d.env.retrieve_exception(error_str) if d.env is not None else None
+                error = py_exc or Error(error_str)
             else:
                 result = createConstFrame(f, d.funcs, d.node.core.core)
 
@@ -1923,7 +1956,10 @@ cdef class VideoNode(RawNode):
             f = self.funcs.getFrame(n, self.node, errorMsg, 4096)
         if f == NULL:
             if (errorMsg[0]):
-                raise Error(ep.decode('utf-8'))
+                msg_str = ep.decode('utf-8')
+                env = _env_current()
+                py_exc = env.retrieve_exception(msg_str) if env is not None else None
+                raise py_exc or Error(msg_str)
             else:
                 raise Error('Internal error - no error given')
         else:
@@ -3043,7 +3079,10 @@ cdef class Function:
         if err:
             emsg = err
             self.funcs.freeMap(outm)
-            raise Error(emsg.decode('utf-8'))
+            msg_str = emsg.decode('utf-8')
+            env = _env_current()
+            py_exc = env.retrieve_exception(msg_str) if env is not None else None
+            raise py_exc or Error(msg_str)
 
         retdict = mapToDict(outm, True)
         self.funcs.freeMap(outm)
@@ -3093,8 +3132,14 @@ cdef void publicFunction(const VSMap *inm, VSMap *outm, void *userData, VSCore *
                     ret = {'val':ret}
                 dictToMap(ret, outm, core, vsapi)
         except BaseException as e:
-            emsg = b'\n' + ''.join(traceback.format_exception(type(e), e, e.__traceback__)).encode('utf-8')
-            vsapi.mapSetError(outm, emsg)
+            if (isinstance(e, BaseException) and not isinstance(e, Exception)) or isinstance(e, FutureCancelledError):
+                exc_id = d.env.store_exception(e) if d.env is not None else 0
+                tb_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+                emsg = f"[VS_PY_EXC_ID:{exc_id}]\n{tb_str}".encode('utf-8')
+                vsapi.mapSetError(outm, emsg)
+            else:
+                emsg = b'\n' + ''.join(traceback.format_exception(type(e), e, e.__traceback__)).encode('utf-8')
+                vsapi.mapSetError(outm, emsg)
 
 
 cdef const VSAPI *getVSAPIInternal() except NULL nogil:
@@ -3133,8 +3178,10 @@ class PythonVSScriptLoggingBridge(logging.Handler):
 
         core.log_message(mt, message)
 
-@cython.final
-cdef class VSScriptEnvironmentPolicy(EnvironmentPolicy):
+
+
+@final
+cdef class VSScriptEnvironmentPolicy:
     cdef dict _env_map
 
     cdef object _stack

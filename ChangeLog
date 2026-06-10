@@ -1,5 +1,20 @@
+r77:
+proptoclip now also take an index for the property
+
+r76:
+vsrepo is now no longer installed automatically for portable installs due to most plugins being available on pypi
+the register-install command can now be used on *nix as well (HolyWu)
+fixed ctrl-c handling in vspipe on non-windows systems
+fixed an issue where certain compilers would occasionally compile the avx2 code path for some internal filters like maximum in a way that could produce pixels garbage along the edges
+once again uses XDG_CONFIG_HOME environment variable for config location, was accidentally forgotten in r74
+fixed issue where caches could be forgotten with frames still in them and leak memory
+completely reworked cache limits so they are much stricter and the number of threads will now be dynamically lowered to avoid using too much memory
+
 r75:
-fixed config issues on fedora linux and probably its closest friends too
+slightly improved memory usage when many frames are queued for output
+improved things for distro packagers
+improved ccfEnableFrameRefDebug flag, it now outputs a list of all allocated frames as a log message after every external frame request has been completed
+fixed config issues on fedora and alpine linux and probably their closest friends too
 plugins can now ship with multiple copies targeting different optimization levels on x64 and have the best one automatically loaded
 simple plugin manifests have been implemented that stops further recursive plugin loading and enables loading of plugins compiled with optimized settings
 multiple improvements to the portable version experience where vsrepo is now installed by default again and forwarding bat files are provided to closer match pre R74 paths

@@ -6,12 +6,18 @@ from ctypes.util import find_library
 from pathlib import Path, PurePath
 from typing import Any
 
+from ._shell import update_shell
 from ._constants import __version__
 
 
 def get_include() -> str:
     """Return the directory that contains the VapourSynth header files."""
     return str(PurePath(__file__).with_name("include"))
+
+
+def get_pkgconfig_dir():
+    """Return the pkgconfig directory in which `vapoursynth.pc` is stored."""
+    return str(PurePath(__file__).with_name("pkgconfig"))
 
 
 def get_plugin_dir() -> str:
@@ -227,7 +233,8 @@ def _get_vapoursynth_config_path() -> Path:
 
         config_path = Path(buf.value) / "vapoursynth"
     else:
-        config_path = Path.home() / ".config/vapoursynth"
+        config_home = os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config"
+        config_path = Path(config_home) / "vapoursynth"
     config_path.mkdir(parents=True, exist_ok=True)
     return config_path / "vapoursynth.toml"
 
@@ -240,11 +247,13 @@ def _has_implicit_config() -> bool:
         return direct_python_exe_path.is_file() and direct_python_dll_path.is_file()
     return False
 
+
 def _mangle_vsscript_key(path):
     if sys.platform == "win32":
         return path.lower()
     else:
-        return path.replace('/lib64/', '/lib/')
+        return path.replace("/lib64/", "/lib/")
+
 
 def vapoursynth_check_env():
     _check_visual_studio_runtime()
@@ -391,30 +400,30 @@ def register_legacy_install() -> None:
 
 
 def register_install() -> None:
-    if sys.platform != "win32":
-        raise OSError("Command is only supported on Windows!")
+    if sys.platform == "win32":
+        entries = [
+            {
+                "subkey": "Environment",
+                "value_name": "VSSCRIPT_PATH",
+                "value_data": get_vsscript(),
+            }
+        ]
 
-    entries = [
-        {
-            "subkey": "Environment",
-            "value_name": "VSSCRIPT_PATH",
-            "value_data": get_vsscript(),
-        }
-    ]
+        if not _write_registry_entries(entries):
+            print("Couldn't write to registry!")
+            sys.exit(1)
+        else:
+            from ctypes.wintypes import HWND, UINT, WPARAM
 
-    if not _write_registry_entries(entries):
-        print("Couldn't write to registry!")
-        sys.exit(1)
+            user32 = ctypes.WinDLL("user32.dll")
+            SendMessageTimeoutW = user32.SendMessageTimeoutW
+            SendMessageTimeoutW.argtypes = [HWND, UINT, WPARAM, ctypes.c_wchar_p, UINT, UINT, ctypes.c_void_p]
+            SendMessageTimeoutW.restype = ctypes.c_void_p
+            #       SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment", SMTO_ABORTIFHUNG, 0, 2000, NULL)
+            SendMessageTimeoutW(0xFFFF, 0x001A, 0, "Environment", 2, 2000, 0)
+            print("Successfully set environment variables!")
     else:
-        from ctypes.wintypes import HWND, UINT, WPARAM
-
-        user32 = ctypes.WinDLL("user32.dll")
-        SendMessageTimeoutW = user32.SendMessageTimeoutW
-        SendMessageTimeoutW.argtypes = [HWND, UINT, WPARAM, ctypes.c_wchar_p, UINT, UINT, ctypes.c_void_p]
-        SendMessageTimeoutW.restype = ctypes.c_void_p
-        #       SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment", SMTO_ABORTIFHUNG, 0, 2000, NULL)
-        SendMessageTimeoutW(0xFFFF, 0x001A, 0, "Environment", 2, 2000, 0)
-        print("Successfully set environment variables!")
+        update_shell(get_vsscript())
 
 
 def register_vfw() -> None:
